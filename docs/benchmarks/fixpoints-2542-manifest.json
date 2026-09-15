@@ -1,0 +1,16 @@
+{
+  "url" : "https://data.geo.so.ch/files/2542.ch.so.agi.dmav.relational.fixpunkteavkategorie3.xtf",
+  "retrievedAt" : "2026-09-15T15:30:24.739091363Z",
+  "downloadBytes" : 1017973,
+  "sha256" : "52aa15cf24dc7279896195fc42e2f685365f98d30b9f263a415695c877d0e1da",
+  "members" : [ {
+    "file" : "source.xtf",
+    "zipMember" : null,
+    "bytes" : 1017973,
+    "sha256" : "52aa15cf24dc7279896195fc42e2f685365f98d30b9f263a415695c877d0e1da",
+    "namespace" : "http://www.interlis.ch/xtf/2.4/INTERLIS",
+    "models" : [ "DMAVTYM_Vermarkung_V1_0", "DMAVTYM_Geometrie_V1_0", "Units", "CoordSys", "DMAVTYM_Qualitaet_V1_0", "Geometry_V2", "GeometryCHLV03_V2", "GeometryCHLV95_V2", "DMAVTYM_Grafik_V1_0", "DMAV_FixpunkteAVKategorie3_V1_0" ],
+    "full" : true,
+    "supportedTransfer" : true
+  } ]
+}

@@ -1,0 +1,16 @@
+{
+  "url" : "https://data.geo.so.ch/files/2541.ch.so.agi.dmav.relational.toleranzstufen.xtf",
+  "retrievedAt" : "2026-09-15T10:17:58.899491765Z",
+  "downloadBytes" : 70626,
+  "sha256" : "8c240560b9257dc698ec597933efcb3a260748bb50767635be87bb7b20079041",
+  "members" : [ {
+    "file" : "source.xtf",
+    "zipMember" : null,
+    "bytes" : 70626,
+    "sha256" : "8c240560b9257dc698ec597933efcb3a260748bb50767635be87bb7b20079041",
+    "namespace" : "http://www.interlis.ch/xtf/2.4/INTERLIS",
+    "models" : [ "DMAV_Toleranzstufen_V1_1" ],
+    "full" : true,
+    "supportedTransfer" : true
+  } ]
+}

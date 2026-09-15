@@ -1,0 +1,21 @@
+{
+  "url" : "https://data.geo.admin.ch/ch.swisstopo-vd.ortschaftenverzeichnis_plz/ortschaftenverzeichnis_plz/ortschaftenverzeichnis_plz_2056.xtf.zip",
+  "retrievedAt" : "2026-09-15T10:18:19.523287627Z",
+  "downloadBytes" : 49218879,
+  "sha256" : "068ea15f79d55a4c8c4dd70e4218b634e9a2109dfe61090792623e0e82a75984",
+  "members" : [ {
+    "file" : "AMTOVZ_INTERLIS24/OfficialIndexOfLocalities_V1_0.ili",
+    "zipMember" : "AMTOVZ_INTERLIS24/OfficialIndexOfLocalities_V1_0.ili",
+    "bytes" : 2443,
+    "sha256" : "e1f555d099bb73944fdadf2a465a37a38db191b6a134805c5207157b68b85b4f"
+  }, {
+    "file" : "AMTOVZ_INTERLIS24/OfficialIndexOfLocalities_V1_0.xtf",
+    "zipMember" : "AMTOVZ_INTERLIS24/OfficialIndexOfLocalities_V1_0.xtf",
+    "bytes" : 382750705,
+    "sha256" : "7334506ebc377738192d4c210c5dc20992e91be3007b3da4fbfb2994a9114e3a",
+    "namespace" : "http://www.interlis.ch/xtf/2.4/INTERLIS",
+    "models" : [ "Units", "CoordSys", "Text_V2", "Geometry_V2", "GeometryCHLV03_V2", "GeometryCHLV95_V2", "OfficialIndexOfLocalities_V1_0" ],
+    "full" : true,
+    "supportedTransfer" : true
+  } ]
+}

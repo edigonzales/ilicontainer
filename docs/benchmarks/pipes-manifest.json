@@ -1,0 +1,16 @@
+{
+  "url" : "https://data.geo.so.ch/files/2541.ch.so.agi.dmav.relational.rohrleitungen.xtf",
+  "retrievedAt" : "2026-09-15T15:17:10.997861206Z",
+  "downloadBytes" : 664,
+  "sha256" : "ecde8d6649d2b03108b238f1ffa807ef9f6463d48a4bc69c48577c212fea8ca1",
+  "members" : [ {
+    "file" : "source.xtf",
+    "zipMember" : null,
+    "bytes" : 664,
+    "sha256" : "ecde8d6649d2b03108b238f1ffa807ef9f6463d48a4bc69c48577c212fea8ca1",
+    "namespace" : "http://www.interlis.ch/xtf/2.4/INTERLIS",
+    "models" : [ "DMAV_Rohrleitungen_V1_1" ],
+    "full" : true,
+    "supportedTransfer" : true
+  } ]
+}

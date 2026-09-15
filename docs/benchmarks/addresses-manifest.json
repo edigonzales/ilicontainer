@@ -1,0 +1,16 @@
+{
+  "url" : "https://data.geo.admin.ch/ch.swisstopo.amtliches-gebaeudeadressverzeichnis/amtliches-gebaeudeadressverzeichnis_ch/amtliches-gebaeudeadressverzeichnis_ch_2056.xtf.zip",
+  "retrievedAt" : "2026-09-15T15:16:13.977685916Z",
+  "downloadBytes" : 249736206,
+  "sha256" : "6a90af4d26b8be71a9c540b5f51e9004fb751b4a66dde447e1769061e54363ac",
+  "members" : [ {
+    "file" : "amtliches-gebaeudeadressverzeichnis_ch_2056.xtf",
+    "zipMember" : "amtliches-gebaeudeadressverzeichnis_ch_2056.xtf",
+    "bytes" : 3361952905,
+    "sha256" : "81dd83f5404c30e12a97dbb6501b575712165cce36f4aae4ffc4dbb6a8d19549",
+    "namespace" : "http://www.interlis.ch/INTERLIS2.3",
+    "models" : [ "Units", "CoordSys", "GeometryCHLV03_V1", "GeometryCHLV95_V1", "OfficialIndexOfAddresses_V2_2" ],
+    "full" : true,
+    "supportedTransfer" : false
+  } ]
+}

@@ -1,0 +1,59 @@
+plugins {
+    id 'java-library'
+    id 'application'
+}
+
+group = 'ch.interlis.ilicontainer'
+version = '0.3.0-prototype'
+
+repositories {
+    mavenCentral()
+    maven { url = uri('https://jars.interlis.ch') }
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+    options.encoding = 'UTF-8'
+}
+dependencies {
+    api 'ch.interlis:iox-api:1.0.3'
+    api 'ch.interlis:iox-ili:1.24.4'
+    implementation 'ch.interlis:ili2c-core:5.6.8'
+    implementation 'ch.interlis:ili2c-tool:5.6.8'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.22.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
+    implementation 'com.github.luben:zstd-jni:1.5.7-16'
+    implementation 'info.picocli:picocli:4.7.7'
+    implementation 'com.fasterxml.woodstox:woodstox-core:7.2.2'
+    testImplementation 'junit:junit:4.13.2'
+}
+dependencyLocking { lockAllConfigurations() }
+application { mainClass = 'ch.interlis.ilicontainer.cli.Main' }
+test { testLogging { events 'failed'; exceptionFormat = 'full' } }
+tasks.register('runtimePaths') {
+    doLast { println configurations.runtimeClasspath.asPath }
+}
+
+tasks.register('prepareData', JavaExec) {
+    group = 'benchmark'
+    description = 'Explicit download: -Pdataset=dmav|localities|addresses -PdataDir=...'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ch.interlis.ilicontainer.benchmark.PrepareData'
+    args providers.gradleProperty('dataset').getOrElse('dmav'), providers.gradleProperty('dataDir').getOrElse('benchmark-data/dmav'), providers.gradleProperty('community').getOrElse('2541')
+}
+
+tasks.register('benchmark', JavaExec) {
+    group = 'benchmark'
+    description = 'Explicit benchmark; pass command arguments with --args.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ch.interlis.ilicontainer.benchmark.BenchmarkMain'
+    maxHeapSize = '384m'
+}
+
+test {
+    systemProperty 'ilic.test.classpath', sourceSets.test.runtimeClasspath.asPath
+}
