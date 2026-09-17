@@ -1,0 +1,6 @@
+{
+  "librarySha256": "10c6268f3b5875c8be23289bde772df3a3df0c784565cfac745f51645fb60ccf",
+  "javaRelease": 8,
+  "runtimeJava": 21,
+  "postMeasurementChange": "An additional CRS guard rejects unresolved generic-domain assignments after an earlier basket supplied a CRS. Explicit CRS assignments in these benchmark datasets are unchanged."
+}

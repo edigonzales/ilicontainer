@@ -1,6 +1,7 @@
 package ch.interlis.ilicontainer.codec;
 
 import ch.interlis.ilicontainer.api.TransferMetadata;
+import ch.interlis.ilicontainer.geometry.*;
 import ch.interlis.iom.IomObject;
 import ch.interlis.iom_j.Iom_jObject;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,7 +43,7 @@ public final class ObjectCodec {
     return Cbor.bytes(node(o));
   }
 
-  private ArrayNode node(IomObject o) {
+  private ArrayNode node(IomObject o) throws IOException {
     ArrayNode a = Cbor.MAPPER.createArrayNode();
     a.add(id(o.getobjecttag()));
     a.add(o.getobjectoid());
@@ -59,9 +60,54 @@ public final class ObjectCodec {
       ArrayNode values = field.addArray();
       for (int j = 0; j < o.getattrvaluecount(key); j++) {
         IomObject child = o.getattrobj(key, j);
-        if (child != null) values.add(node(child));
+        if (child != null
+            && "wkb".equals(metadata.geometryEncoding)
+            && (IomGeometry.isGeometry(child.getobjecttag())
+                || metadata.geometries.containsKey(o.getobjecttag() + "." + key))) {
+          String path = o.getobjecttag() + "." + key;
+          TransferMetadata.GeometryDescriptor descriptor = metadata.geometries.get(path);
+          if (descriptor == null) throw new IOException("Unknown geometry descriptor " + path);
+          try {
+            if (o.getattrvaluecount(key) != 1)
+              throw new IOException("Multiple geometry attribute values");
+            String expected =
+                descriptor.type.equals("CoordType")
+                    ? "COORD"
+                    : descriptor.type.equals("MultiCoordType")
+                        ? "MULTICOORD"
+                        : descriptor.type.equals("PolylineType")
+                            ? "POLYLINE"
+                            : descriptor.type.equals("MultiPolylineType")
+                                ? "MULTIPOLYLINE"
+                                : "MULTISURFACE";
+            if (!expected.equals(child.getobjecttag()))
+              throw new IOException("Model/geometry type mismatch");
+            long verificationStart = System.nanoTime();
+            byte[] wkb;
+            try {
+              wkb = IomGeometry.encode(child, descriptor.multiSurface);
+            } finally {
+              metadata.geometryVerificationNanos += System.nanoTime() - verificationStart;
+            }
+            Geometry geometry = IsoWkb.read(wkb);
+            if (geometry.dimension != descriptor.dimension)
+              throw new IOException("Model/geometry dimension mismatch");
+            if (descriptor.crs == null || descriptor.crs.trim().isEmpty())
+              throw new IOException("Unresolved CRS; supply --geometry-crs " + path + "=CRS");
+            ObjectNode marker = values.addObject();
+            marker.put("geometry", path);
+            marker.put("root", child.getobjecttag());
+            marker.put("wkb", wkb);
+          } catch (IOException ex) {
+            throw new IOException(path + ": " + ex.getMessage(), ex);
+          }
+        } else if (child != null) values.add(node(child));
         else {
           String value = o.getattrprim(key, j);
+          if (value != null
+              && "wkb".equals(metadata.geometryEncoding)
+              && metadata.geometries.containsKey(o.getobjecttag() + "." + key))
+            throw new IOException("Primitive geometry value: " + o.getobjecttag() + "." + key);
           boolean number =
               metadata.numericTypes.containsKey(o.getobjecttag() + "." + key)
                   || ((o.getobjecttag().equals("COORD") || o.getobjecttag().equals("ARC"))
@@ -96,7 +142,16 @@ public final class ObjectCodec {
       if (values.size() == 0) o.setattrundefined(key);
       for (JsonNode v : values) {
         if (v.isArray()) o.addattrobj(key, object(v));
-        else if (v.isObject())
+        else if (v.isObject() && v.has("wkb")) {
+          if (!"wkb".equals(metadata.geometryEncoding)
+              || !metadata.geometries.containsKey(v.path("geometry").asText())
+              || !(o.getobjecttag() + "." + key).equals(v.path("geometry").asText()))
+            throw new IOException("Invalid geometry descriptor reference");
+          Geometry g = IsoWkb.read(v.get("wkb").binaryValue());
+          if (g.dimension != metadata.geometries.get(v.get("geometry").asText()).dimension)
+            throw new IOException("Geometry dimension mismatch");
+          o.addattrobj(key, IomGeometry.toIom(g, v.path("root").asText()));
+        } else if (v.isObject())
           o.addattrvalue(
               key,
               new BigDecimal(new BigInteger(v.get("m").binaryValue()), v.get("s").intValue())
@@ -105,6 +160,30 @@ public final class ObjectCodec {
       }
     }
     return o;
+  }
+
+  public ch.interlis.ilicontainer.api.BoundingBox geometryBounds(JsonNode record, String attribute)
+      throws IOException {
+    ch.interlis.ilicontainer.api.BoundingBox result = null;
+    String tag = name(record.get(0).intValue());
+    for (JsonNode field : record.get(7))
+      if (attribute.equals(name(field.get(0).intValue()))) {
+        for (JsonNode v : field.get(1)) {
+          if (v.isNull()) continue;
+          String path = tag + "." + attribute;
+          if (!v.has("wkb")
+              || !path.equals(v.path("geometry").asText())
+              || !metadata.geometries.containsKey(path))
+            throw new IOException("Invalid geometry marker");
+          Geometry geometry = IsoWkb.read(v.get("wkb").binaryValue());
+          if (geometry.dimension != metadata.geometries.get(path).dimension)
+            throw new IOException("Geometry dimension mismatch");
+          ch.interlis.ilicontainer.api.BoundingBox box = GeometryEnvelope.bounds(geometry);
+          if (result == null) result = box;
+          else result.expand(box);
+        }
+      }
+    return result;
   }
 
   private static String str(JsonNode n) {

@@ -43,14 +43,16 @@ public final class IliContainer implements AutoCloseable {
     this.metrics = metrics;
     store = new FrameStore(source, metrics, cache);
     try {
-      Frames.checkHeader(
-          new DataInputStream(new ByteArrayInputStream(source.read(0, Frames.HEADER_SIZE))));
+      int formatVersion =
+          Frames.checkHeader(
+              new DataInputStream(new ByteArrayInputStream(source.read(0, Frames.HEADER_SIZE))));
       roots = Frames.footer(source);
       Frames.Frame m = store.read(Frames.HEADER_SIZE);
       if (m.type != Frames.METADATA) throw new IOException("Missing metadata");
       metadata = Cbor.read(m.data, TransferMetadata.class);
       if (!"2.4".equals(metadata.version) || metadata.mappingVersion != 1)
         throw new IOException("Unsupported transfer/mapping version");
+      metadata.validateFormat(formatVersion);
       codec = new ObjectCodec(metadata, true);
       tree = new BTree(store, roots[0]);
     } catch (IOException e) {
@@ -121,6 +123,29 @@ public final class IliContainer implements AutoCloseable {
         it.close();
       }
     };
+  }
+
+  public List<String> layers() {
+    checkOpen();
+    if (!"wkb".equals(metadata.geometryEncoding))
+      throw new IllegalStateException("GIS API requires WKB geometry profile");
+    List<String> layers = new ArrayList<String>();
+    for (String id : metadata.geometries.keySet())
+      if (metadata.concreteClasses.contains(id.substring(0, id.lastIndexOf('.')))) layers.add(id);
+    return Collections.unmodifiableList(layers);
+  }
+
+  public GisLayer openLayer(String id) {
+    if (!layers().contains(id)) throw new IllegalArgumentException("Unknown GIS layer " + id);
+    return new GisLayer(this, id);
+  }
+
+  Fragment getFid(long fid) {
+    checkOpen();
+    return new Fragment(
+        this,
+        () -> singleton(fid < 0 ? null : tree.get("F\0" + FilesEx.number(fid))),
+        "FID " + fid);
   }
 
   public Fragment getTopic(String name) {

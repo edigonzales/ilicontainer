@@ -32,12 +32,23 @@ public final class ContainerWriter {
       try (ExternalSort objects = new ExternalSort(temp, options.sortMemoryBytes);
           ExternalSort index = new ExternalSort(temp, options.sortMemoryBytes)) {
         spool(input, bridge, codec, objects, temp);
+        options.geometryVerificationNanos = bridge.metadata.geometryVerificationNanos;
         try (RandomAccessFile out = new RandomAccessFile(output.toFile(), "rw");
             CloseableIterator<ExternalSort.Entry> records = objects.finish()) {
-          Frames.header(out);
-          Frames.write(out, Frames.METADATA, Cbor.bytes(bridge.metadata));
+          Frames.header(out, bridge.metadata.formatVersion());
+          com.fasterxml.jackson.databind.node.ObjectNode storedMetadata =
+              Cbor.MAPPER.valueToTree(bridge.metadata);
+          if (bridge.metadata.formatVersion() == 1)
+            storedMetadata.remove(
+                Arrays.asList(
+                    "geometryEncoding",
+                    "geometryProfile",
+                    "geometries",
+                    "scalarTypes",
+                    "concreteClasses"));
+          Frames.write(out, Frames.METADATA, Cbor.bytes(storedMetadata));
           BasketContext basket = null;
-          long basketOffset = 0, chunkId = 0;
+          long basketOffset = 0, chunkId = 0, fid = 0;
           Chunk.Info info = null;
           ByteArrayOutputStream raw = new ByteArrayOutputStream();
           List<String> tids = new ArrayList<String>();
@@ -76,6 +87,7 @@ public final class ContainerWriter {
               if (info == null) {
                 info = new Chunk.Info();
                 info.id = chunkId++;
+                if (bridge.metadata.formatVersion() == 2) info.firstFid = fid;
                 info.basketPosition = basket.position;
                 info.basketOffset = basketOffset;
                 info.className = cls;
@@ -84,9 +96,11 @@ public final class ContainerWriter {
                 info.compression = options.compression;
               }
               raw.write(record.value);
-              IomObject obj = codec.decode(record.value);
-              tids.add(obj.getobjectoid());
+              com.fasterxml.jackson.databind.JsonNode tid =
+                  Cbor.MAPPER.readTree(record.value).get(1);
+              tids.add(tid.isNull() ? null : tid.asText());
               info.count++;
+              fid++;
             }
           }
           if (info != null) writeChunk(out, index, info, raw.toByteArray(), tids, options);
@@ -116,6 +130,8 @@ public final class ContainerWriter {
     reader.setModel(bridge.model);
     long basket = -1, ordinal = 0;
     boolean inside = false, ended = false;
+    String bid = null;
+    BasketContext currentBasket = null;
     try {
       IoxEvent e;
       while ((e = reader.read()) != null) {
@@ -129,6 +145,8 @@ public final class ContainerWriter {
           if (start.getBid() == null || start.getBid().isEmpty())
             throw new IOException("Missing BID");
           BasketContext context = new BasketContext(start, ++basket);
+          bid = context.bid;
+          currentBasket = context;
           objects.add(FilesEx.number(basket) + "\0!basket", Cbor.bytes(context));
           inside = true;
         } else if (e instanceof ObjectEvent) {
@@ -143,9 +161,20 @@ public final class ContainerWriter {
             if (!(def instanceof ch.interlis.ili2c.metamodel.AssociationDef))
               throw new IOException("Missing TID: " + obj.getobjecttag());
           }
-          objects.add(
-              FilesEx.number(basket) + "\0" + obj.getobjecttag() + "\0" + FilesEx.number(ordinal++),
-              codec.encode(obj));
+          try {
+            if ("wkb".equals(bridge.metadata.geometryEncoding))
+              bridge.resolveGeometryCrs(obj, currentBasket);
+            objects.add(
+                FilesEx.number(basket)
+                    + "\0"
+                    + obj.getobjecttag()
+                    + "\0"
+                    + FilesEx.number(ordinal++),
+                codec.encode(obj));
+          } catch (IOException ex) {
+            throw new IOException(
+                "BID=" + bid + " TID=" + obj.getobjectoid() + ": " + ex.getMessage(), ex);
+          }
         } else if (e instanceof EndBasketEvent) {
           if (!inside) throw new IOException("Unexpected basket end");
           inside = false;
@@ -182,7 +211,11 @@ public final class ContainerWriter {
     index.add("C\0" + info.className + "\0" + order, data);
     index.add("D\0" + order, data);
     index.add("T\0" + info.topic + "\0" + order, data);
-    for (int i = 0; i < tids.size(); i++)
+    for (int i = 0; i < tids.size(); i++) {
+      if ("wkb".equals(options.geometryEncoding))
+        index.add(
+            "F\0" + FilesEx.number(info.firstFid + i),
+            Cbor.bytes(new Location(offset, info.basketOffset, info.basketPosition, info.id, i)));
       if (tids.get(i) != null) {
         String key = "O\0" + tids.get(i);
         byte[] value =
@@ -190,5 +223,6 @@ public final class ContainerWriter {
         index.add(key, value);
         options.objectDirectoryEntryBytes += 8 + key.getBytes("UTF-8").length + value.length;
       }
+    }
   }
 }

@@ -36,10 +36,19 @@ public class GeometryTest {
       arc.setattrvalue("A2", Double.toString(cy + r * Math.sin(start + sweep / 2)));
       line.addattrobj("segment", arc);
       BoundingBox box = GeometryBounds.bounds(line);
+      IomObject polyline = new Iom_jObject("POLYLINE", null);
+      polyline.addattrobj("sequence", line);
+      BoundingBox wkbBox =
+          ch.interlis.ilicontainer.geometry.GeometryEnvelope.bounds(
+              ch.interlis.ilicontainer.geometry.IsoWkb.read(
+                  ch.interlis.ilicontainer.geometry.IomGeometry.encode(polyline, false)));
       for (int j = 0; j <= 200; j++) {
         double angle = start + sweep * j / 200,
             x = cx + r * Math.cos(angle),
             y = cy + r * Math.sin(angle);
+        assertTrue(
+            "WKB arc " + i + " sample " + j,
+            x >= wkbBox.minX && x <= wkbBox.maxX && y >= wkbBox.minY && y <= wkbBox.maxY);
         assertTrue(
             "arc " + i + " sample " + j,
             x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY);

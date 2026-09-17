@@ -48,6 +48,9 @@ public final class BenchmarkMain implements Callable<Integer> {
       description = "Both numeric codecs and 64 KiB, 256 KiB, 1 MiB, 4 MiB chunks")
   boolean matrix;
 
+  @Option(names = "--geometry-matrix", description = "IOM/WKB, lexical scalars, four chunk sizes")
+  boolean geometryMatrix;
+
   @Option(
       names = "--refresh-spatial",
       description = "Remeasure spatial indexes/access against existing verified core results")
@@ -128,73 +131,100 @@ public final class BenchmarkMain implements Callable<Integer> {
             }
           }
         }
-      int[] sizes = matrix ? new int[] {65536, 262144, 1048576, 4194304} : new int[] {262144};
-      String[] codecs = matrix ? new String[] {"lexical", "decimal"} : new String[] {"lexical"};
-      for (String codec : codecs)
-        for (int size : sizes) {
-          String variant = codec + "-" + size;
-          Path core = output.resolve(variant + ".ilic");
-          WriterOptions w = options();
-          w.numericEncoding = codec;
-          w.chunkSize = size;
-          w.overwrite = true;
-          Meter meter = new Meter();
-          ContainerWriter.create(input, core, w);
-          Map<String, Object> creation = meter.finish(0, -1);
-          creation.put("temporaryPeakSampledBytes", w.temporaryPeakSampledBytes);
-          creation.put("objectDirectoryEntryBytes", w.objectDirectoryEntryBytes);
-          creation.put("operation", "create");
-          creation.put("variant", variant);
-          creation.put("fileBytes", Files.size(core));
-          rows.add(creation);
-          Path roundtrip = output.resolve(variant + "-roundtrip.xtf");
-          try (IliContainer c = IliContainer.open(core);
-              OutputStream exported = new BufferedOutputStream(Files.newOutputStream(roundtrip))) {
-            c.export(exported);
-          }
-          long verified = RoundtripVerifier.verify(input, roundtrip, bridge, temp);
-          creation.put("semanticRoundtripRecords", verified);
-          Files.delete(roundtrip);
-          for (int r = 0; r < repeats; r++) {
-            try (InputStream in = Files.newInputStream(core)) {
-              Map<String, Object> row = scan(IliContainer.stream(in));
-              row.put("variant", variant);
-              row.put("repeat", r);
-              row.put("fileBytes", Files.size(core));
-              row.put(
-                  "sourceMiBPerSecond",
-                  Files.size(core) / 1048576.0 / ((Double) row.get("wallMillis") / 1000));
-              rows.add(row);
+      int[] sizes =
+          matrix || geometryMatrix
+              ? new int[] {65536, 262144, 1048576, 4194304}
+              : new int[] {262144};
+      String[] codecs =
+          matrix && !geometryMatrix
+              ? new String[] {"lexical", "decimal"}
+              : new String[] {"lexical"};
+      for (String encoding : geometryMatrix ? new String[] {"iom", "wkb"} : new String[] {"iom"})
+        for (String codec : codecs)
+          for (int size : sizes) {
+            String variant = (geometryMatrix ? encoding + "-" : "") + codec + "-" + size;
+            Path core = output.resolve(variant + ".ilic");
+            WriterOptions w = options();
+            w.numericEncoding = codec;
+            w.geometryEncoding = encoding;
+            if (geometryMatrix)
+              for (Map.Entry<String, String> e : modelMetadata.geometryCrs.entrySet())
+                if (e.getValue().isEmpty()) w.geometryCrs.put(e.getKey(), crs);
+            w.chunkSize = size;
+            w.overwrite = true;
+            Meter meter = new Meter();
+            try {
+              ContainerWriter.create(input, core, w);
+            } catch (IOException failure) {
+              if (!geometryMatrix) throw failure;
+              Map<String, Object> rejected = meter.finish(0, -1);
+              rejected.put("variant", variant);
+              rejected.put("operation", "create-rejected");
+              rejected.put("diagnosis", failure.getMessage());
+              rows.add(rejected);
+              writeReport();
+              continue;
             }
-          }
-          try (IliContainer c = IliContainer.open(core);
-              Fragment f = c.getClass(cls);
-              Stream<SelectedObject> stream = f.objects()) {
-            Iterator<SelectedObject> it = stream.iterator();
-            while (it.hasNext()) {
-              SelectedObject selected = it.next();
-              BoundingBox box = GeometryBounds.attribute(selected.getObject(), geometry);
-              if (box != null) {
-                if (extent == null) extent = box;
-                else extent.expand(box);
+            Map<String, Object> creation = meter.finish(0, -1);
+            creation.put("temporaryPeakSampledBytes", w.temporaryPeakSampledBytes);
+            creation.put(
+                "geometryConversionAndProofMillis", w.geometryVerificationNanos / 1000000.0);
+            creation.put("objectDirectoryEntryBytes", w.objectDirectoryEntryBytes);
+            creation.put("operation", "create");
+            creation.put("variant", variant);
+            creation.put("fileBytes", Files.size(core));
+            rows.add(creation);
+            Path roundtrip = output.resolve(variant + "-roundtrip.xtf");
+            try (IliContainer c = IliContainer.open(core);
+                OutputStream exported =
+                    new BufferedOutputStream(Files.newOutputStream(roundtrip))) {
+              c.export(exported);
+            }
+            long verified = RoundtripVerifier.verify(input, roundtrip, bridge, temp);
+            creation.put("semanticRoundtripRecords", verified);
+            Files.delete(roundtrip);
+            for (int r = 0; r < repeats; r++) {
+              try (InputStream in = Files.newInputStream(core)) {
+                Map<String, Object> row = scan(IliContainer.stream(in));
+                row.put("variant", variant);
+                row.put("repeat", r);
+                row.put("fileBytes", Files.size(core));
+                row.put(
+                    "sourceMiBPerSecond",
+                    Files.size(core) / 1048576.0 / ((Double) row.get("wallMillis") / 1000));
+                rows.add(row);
               }
             }
+            try (IliContainer c = IliContainer.open(core);
+                Fragment f = c.getClass(cls);
+                Stream<SelectedObject> stream = f.objects()) {
+              Iterator<SelectedObject> it = stream.iterator();
+              while (it.hasNext()) {
+                SelectedObject selected = it.next();
+                BoundingBox box = GeometryBounds.attribute(selected.getObject(), geometry);
+                if (box != null) {
+                  if (extent == null) extent = box;
+                  else extent.expand(box);
+                }
+              }
+            }
+            if (extent == null) throw new IOException("No geometry for benchmark class");
+            access(core, variant, false);
+            if (encoding.equals("wkb")) gisAccess(core, variant, false);
+            Path spatial = output.resolve(variant + "-spatial.ilic");
+            Files.copy(core, spatial, StandardCopyOption.REPLACE_EXISTING);
+            meter = new Meter();
+            SpatialIndex.add(spatial, cls, geometry, crs);
+            Map<String, Object> index = meter.finish(0, -1);
+            index.put("operation", "build-spatial");
+            index.put("variant", variant);
+            index.put("fileBytes", Files.size(spatial));
+            index.put("spatialOverheadBytes", Files.size(spatial) - Files.size(core));
+            rows.add(index);
+            access(spatial, variant + "-spatial", true);
+            if (encoding.equals("wkb")) gisAccess(spatial, variant + "-spatial", true);
+            writeReport();
           }
-          if (extent == null) throw new IOException("No geometry for benchmark class");
-          access(core, variant, false);
-          Path spatial = output.resolve(variant + "-spatial.ilic");
-          Files.copy(core, spatial, StandardCopyOption.REPLACE_EXISTING);
-          meter = new Meter();
-          SpatialIndex.add(spatial, cls, geometry, crs);
-          Map<String, Object> index = meter.finish(0, -1);
-          index.put("operation", "build-spatial");
-          index.put("variant", variant);
-          index.put("fileBytes", Files.size(spatial));
-          index.put("spatialOverheadBytes", Files.size(spatial) - Files.size(core));
-          rows.add(index);
-          access(spatial, variant + "-spatial", true);
-          writeReport();
-        }
       writeReport();
       return 0;
     } finally {
@@ -287,6 +317,50 @@ public final class BenchmarkMain implements Callable<Integer> {
     Map<String, Object> row = meter.finish(count, first);
     row.put("operation", "scan");
     return row;
+  }
+
+  private void gisAccess(Path file, String variant, boolean spatial) throws Exception {
+    try (RangeServer server = new RangeServer(file)) {
+      for (boolean remote : new boolean[] {false, true})
+        for (int r = 0; r < repeats; r++) {
+          try (IliContainer c = remote ? IliContainer.open(server.uri()) : IliContainer.open(file);
+              GisLayer layer = c.openLayer(cls + "." + geometry)) {
+            for (String cache : Arrays.asList("cold", "warm")) {
+              if (cache.equals("cold")) c.clearCache();
+              c.metrics().reset();
+              Meter meter = new Meter();
+              long n = 0, first = -1;
+              double cx = (extent.minX + extent.maxX) / 2, cy = (extent.minY + extent.maxY) / 2;
+              double dx = (extent.maxX - extent.minX) * .005,
+                  dy = (extent.maxY - extent.minY) * .005;
+              try (Stream<GisFeature> stream =
+                  spatial
+                      ? layer.queryCandidates(new BoundingBox(cx - dx, cy - dy, cx + dx, cy + dy))
+                      : layer.features()) {
+                Iterator<GisFeature> it = stream.iterator();
+                while (it.hasNext()) {
+                  it.next();
+                  n++;
+                  if (first < 0) first = System.nanoTime() - meter.start;
+                }
+              }
+              Map<String, Object> row = meter.finish(n, first);
+              row.put("variant", variant);
+              row.put("operation", spatial ? "gis-bbox-small" : "gis-scan");
+              row.put("remote", remote);
+              row.put("cache", cache);
+              row.put("repeat", r);
+              row.put("bytesRead", c.metrics().bytesRead);
+              row.put("chunks", c.metrics().chunksRead);
+              row.put("requests", c.metrics().requests);
+              row.put("indexBytes", c.metrics().indexBytes);
+              row.put("chunkBytes", c.metrics().chunkBytes);
+              row.put("cacheHits", c.metrics().cacheHits);
+              rows.add(row);
+            }
+          }
+        }
+    }
   }
 
   private void access(Path file, String variant, boolean spatial) throws Exception {

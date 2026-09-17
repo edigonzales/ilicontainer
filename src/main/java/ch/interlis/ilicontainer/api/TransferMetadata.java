@@ -4,7 +4,33 @@ import ch.interlis.iom_j.xtf.XtfStartTransferEvent;
 import java.util.*;
 
 public final class TransferMetadata {
+  @com.fasterxml.jackson.annotation.JsonIgnore public long geometryVerificationNanos;
   public int mappingVersion = 1;
+  public String geometryEncoding = "iom", geometryProfile;
+  public Map<String, GeometryDescriptor> geometries = new TreeMap<String, GeometryDescriptor>();
+  public Map<String, String> scalarTypes = new TreeMap<String, String>();
+  public Set<String> concreteClasses = new TreeSet<String>();
+
+  public static final class GeometryDescriptor {
+    public String type, crs, domain;
+    public int dimension, nullAxis, piHalfAxis;
+    public boolean multiSurface, directed, generic;
+    public List<String> minimum = new ArrayList<String>(), maximum = new ArrayList<String>();
+    public List<Integer> accuracy = new ArrayList<Integer>();
+    public List<String> lineForms = new ArrayList<String>();
+  }
+
+  public int formatVersion() {
+    return "wkb".equals(geometryEncoding) ? 2 : 1;
+  }
+
+  public void validateFormat(int version) throws java.io.IOException {
+    if (version != formatVersion()
+        || !("iom".equals(geometryEncoding) || "wkb".equals(geometryEncoding))
+        || (version == 2 && !"wkb-iso-v1".equals(geometryProfile)))
+      throw new java.io.IOException("Unsupported geometry profile/header combination");
+  }
+
   public String sender, comment, version = "2.4", numericEncoding = "lexical";
   public List<String> dictionary = new ArrayList<String>();
   public List<String> transferModels = new ArrayList<String>();

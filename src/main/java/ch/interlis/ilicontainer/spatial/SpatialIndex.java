@@ -4,7 +4,6 @@ import ch.interlis.ilicontainer.api.*;
 import ch.interlis.ilicontainer.codec.Cbor;
 import ch.interlis.ilicontainer.container.*;
 import ch.interlis.ilicontainer.index.ExternalSort;
-import ch.interlis.iom.IomObject;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -67,7 +66,9 @@ public final class SpatialIndex {
             Location loc = refs.next();
             if (loc.chunkOffset == 0) continue;
             BasketContext basket = c.basket(loc);
-            if (!basket.domains.isEmpty() && explicitCrs == null)
+            if (!basket.domains.isEmpty()
+                && explicitCrs == null
+                && !"wkb".equals(c.metadata().geometryEncoding))
               throw new IOException(
                   "Basket generic-domain assignments require an explicit verified CRS");
             String signature = new TreeMap<String, String>(basket.domains).toString();
@@ -78,8 +79,12 @@ public final class SpatialIndex {
             try (ObjectCursor objects = c.objects(loc)) {
               int ordinal = 0;
               while (objects.hasNext()) {
-                IomObject o = objects.next();
-                BoundingBox box = GeometryBounds.attribute(o, attr);
+                BoundingBox box;
+                if ("wkb".equals(c.metadata().geometryEncoding))
+                  box =
+                      new ch.interlis.ilicontainer.codec.ObjectCodec(c.metadata(), true)
+                          .geometryBounds(objects.nextRecord(), attr);
+                else box = GeometryBounds.attribute(objects.next(), attr);
                 if (box != null) {
                   Entry e = new Entry();
                   e.box = box;

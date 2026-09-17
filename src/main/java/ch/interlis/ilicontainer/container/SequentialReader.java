@@ -20,12 +20,13 @@ public final class SequentialReader implements IoxReader {
   public SequentialReader(InputStream input) throws IOException {
     in = new DataInputStream(new BufferedInputStream(input, 65536));
     try {
-      Frames.checkHeader(in);
+      int formatVersion = Frames.checkHeader(in);
       Frames.Frame f = Frames.read(in);
       if (f.type != Frames.METADATA) throw new IOException("Missing metadata");
       metadata = Cbor.read(f.data, TransferMetadata.class);
       if (!"2.4".equals(metadata.version) || metadata.mappingVersion != 1)
         throw new IOException("Unsupported transfer/mapping version");
+      metadata.validateFormat(formatVersion);
       codec = new ObjectCodec(metadata, true);
     } catch (IOException e) {
       in.close();

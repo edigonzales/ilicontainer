@@ -29,14 +29,22 @@ public final class Frames {
   }
 
   public static void header(DataOutput out) throws IOException {
+    header(out, VERSION);
+  }
+
+  public static void header(DataOutput out, int version) throws IOException {
     out.writeLong(MAGIC);
-    out.writeInt(VERSION);
+    out.writeInt(version);
     out.writeInt(0);
   }
 
-  public static void checkHeader(DataInput in) throws IOException {
-    if (in.readLong() != MAGIC || in.readInt() != VERSION || in.readInt() != 0)
+  public static int checkHeader(DataInput in) throws IOException {
+    long magic = in.readLong();
+    int version = in.readInt();
+    int features = in.readInt();
+    if (magic != MAGIC || (version != 1 && version != 2) || features != 0)
       throw new IOException("Unsupported IliContainer header/version/features");
+    return version;
   }
 
   public static long write(RandomAccessFile out, int type, byte[] data) throws IOException {
@@ -87,12 +95,16 @@ public final class Frames {
   }
 
   public static void footer(RandomAccessFile out, long root, long spatial) throws IOException {
-    long size = out.getFilePointer() + FOOTER_SIZE;
+    long position = out.getFilePointer();
+    out.seek(8);
+    int version = out.readInt();
+    out.seek(position);
+    long size = position + FOOTER_SIZE;
     ByteBuffer b = ByteBuffer.allocate(32);
     b.putLong(FOOTER_MAGIC).putLong(root).putLong(spatial).putLong(size);
     out.write(b.array());
     out.writeInt(crc(b.array()));
-    out.writeInt(VERSION);
+    out.writeInt(version);
   }
 
   public static long[] footer(RangeSource source) throws IOException {
@@ -104,13 +116,16 @@ public final class Frames {
     int crc = b.getInt(), version = b.getInt();
     if (magic != FOOTER_MAGIC
         || storedSize != size
-        || version != VERSION
+        || (version != 1 && version != 2)
         || crc != crc(java.util.Arrays.copyOf(bytes, 32)))
       throw new IOException("Invalid/truncated footer");
     if (root < HEADER_SIZE
         || root >= size - FOOTER_SIZE
         || spatial < 0
         || spatial >= size - FOOTER_SIZE) throw new IOException("Invalid footer pointers");
+    int headerVersion =
+        checkHeader(new DataInputStream(new ByteArrayInputStream(source.read(0, HEADER_SIZE))));
+    if (version != headerVersion) throw new IOException("Header/footer version mismatch");
     return new long[] {root, spatial};
   }
 }

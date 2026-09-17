@@ -30,3 +30,27 @@ Die messbaren Ergebnisse und Grenzen stehen in [BENCHMARKS.md](BENCHMARKS.md). D
 Keine exakte Intersects-Prüfung, CRS-Transformation, automatische Referenznachladung, vollständige obligatorische Modellvalidierung, räumliche Datenumsortierung, Schreibkonkurrenz oder dauerhafte Binärkompatibilitätszusage. Einzelne Frames sind durch Java-Arrays auf weniger als 2 GiB begrenzt; die Datei selbst verwendet 64-Bit-Offsets. Explizite Radiusbögen und numerisch mehrdeutige Bögen werden für die Indexierung mit Diagnose abgewiesen und bleiben im Core erhalten.
 
 Die Modellabbildung ist für Offline-Export vollständig; eingebettete ILI-Quellen sind zusätzlich optional. Der Offline-Prozesstest verwendet sowohl einen leeren als auch einen gefüllten Transfer, ein neues Arbeitsverzeichnis und nicht erreichbare HTTP-/HTTPS-Proxys.
+
+## Optionale WKB-Erweiterung
+
+Das Profil `wkb-iso-v1` ergänzt Format 2, ISO-WKB mit echten Kreisbögen, einen
+seitenweisen FID-Index und die direkte `GisLayer`-/`GisFeature`-API.
+IOM bleibt Standard und verwendet weiterhin Format 1. Modell- und
+Basketmetadaten ermöglichen weiterhin Offline-XTF-Export.
+
+Die Kurvenkodierung adaptiert die Vorarbeit aus dem Hop-Geometrieplugin ohne
+Hop-/JTS-Geometrieobjekte und ohne implizite Linearisierung. Die ursprünglichen
+Dezimalwerte und Kontrollpunkte werden vor Veröffentlichung durch einen
+semantischen Rückvergleich abgesichert. Eine vollständige Constraintvalidierung
+ist weiterhin nicht Teil der Erstellung.
+
+Der abschliessende Lauf umfasst 50 erfolgreiche Java-Tests.
+Die vorhandenen Semantik-, Container-, Remote- und Spatial-Paging-Tests werden
+für beide Profile ausgeführt. Die GIS-API wird zusätzlich gegen unabhängige
+Gittererwartungen, FID-Einzelzugriffe, verschachtelte Geometrien und einen
+wechselnden HTTP-Dateistand geprüft. Linux-GDAL liest 22 unabhängige XY-/XYZ-
+Geometriefixtures und bestätigt deren Typen, Komponenten und ISO-WKB-Bytes.
+
+Bedienung und Profilgrenzen: [WKB.md](WKB.md).
+Messergebnisse: [WKB-Matrix](benchmarks/wkb/README.md).
+Ein QGIS-/GDAL-Dateitreiber und schreibender GIS-Zugriff sind spätere Erweiterungen.

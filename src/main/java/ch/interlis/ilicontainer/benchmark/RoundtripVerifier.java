@@ -84,6 +84,8 @@ public final class RoundtripVerifier {
   }
 
   private static Object canonical(IomObject o, TransferMetadata metadata) {
+    if ("BOUNDARY".equals(o.getobjecttag()))
+      return ch.interlis.ilicontainer.geometry.GeometrySemantics.canonical(o);
     List<Object> value = new ArrayList<Object>();
     Collections.addAll(
         value,

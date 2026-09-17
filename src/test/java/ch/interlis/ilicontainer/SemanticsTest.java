@@ -18,11 +18,26 @@ import java.util.concurrent.TimeUnit;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
+@org.junit.runner.RunWith(org.junit.runners.Parameterized.class)
 public class SemanticsTest {
+  @org.junit.runners.Parameterized.Parameters(name = "geometry={0}")
+  public static java.util.Collection<Object[]> encodings() {
+    return java.util.Arrays.asList(new Object[][] {{"iom"}, {"wkb"}});
+  }
+
+  @org.junit.runners.Parameterized.Parameter public String geometryEncoding;
+
+  private void geometryOptions(WriterOptions w) {
+    w.geometryEncoding = geometryEncoding;
+    w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
+    w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
+  }
+
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   WriterOptions options() {
     WriterOptions w = new WriterOptions();
+    geometryOptions(w);
     w.modelFiles.add(ContainerTest.fixture("Tiny.ili").toAbsolutePath().toString());
     return w;
   }
@@ -149,7 +164,8 @@ public class SemanticsTest {
         out.write(
             "<Tiny:Item ili:tid=\"o"
                 + i
-                + "\"><Tiny:name>growing transfer</Tiny:name></Tiny:Item>");
+                + "\"><Tiny:name>growing"
+                + " transfer</Tiny:name><Tiny:point><geom:coord><geom:c1>1</geom:c1><geom:c2>2</geom:c2></geom:coord></Tiny:point></Tiny:Item>");
       out.write("</Tiny:Data></ili:datasection></ili:transfer>");
     }
     Path file = tmp.getRoot().toPath().resolve("many.ilic");
@@ -163,7 +179,8 @@ public class SemanticsTest {
                 ScanProbe.class.getName(),
                 input.toString(),
                 file.toString(),
-                ContainerTest.fixture("Tiny.ili").toAbsolutePath().toString())
+                ContainerTest.fixture("Tiny.ili").toAbsolutePath().toString(),
+                geometryEncoding)
             .redirectErrorStream(true)
             .redirectOutput(log.toFile())
             .start();

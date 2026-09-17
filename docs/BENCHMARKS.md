@@ -67,3 +67,20 @@ Ein erster grosser Lauf mit 1 GiB Heap endete mit Exit-Code 137. Er wurde verwor
 ## Ergebnisse
 
 Die eingecheckten Rohwerte, Eingabemanifeste und die kompakte Auswertung stehen unter [benchmarks](benchmarks/). Kompressions- und Layoutentscheidungen bleiben experimentell. Die vollständigen automatisierten Referenztests stehen ergänzend im Gradle-Testbericht.
+
+## IOM/WKB-Geometriematrix
+
+`--geometry-matrix` ersetzt die Zahlenkodierungsmatrix durch IOM/WKB × 64 KiB,
+256 KiB, 1 MiB und 4 MiB. Beide Profile verwenden `lexical` für skalare Werte und
+Zstandard-Level 3. Nicht auflösbare CRS werden für diese bekannten LV95-Datensätze
+explizit mit dem angegebenen Benchmark-CRS belegt; dies ist keine Transformation.
+
+Die bestehenden Befehle können mit `--geometry-matrix --repeats 3` in separaten
+Ausgabeverzeichnissen ausgeführt werden. Zusätzlich werden lokale und entfernte
+GIS-Klassenscans sowie kleine Spatial-Kandidatenabfragen gemessen, jeweils kalt und
+warm. `geometryConversionAndProofMillis` weist die gemeinsame Konversions- und
+Reversibilitätsprüfzeit bei der Erstellung aus. Ein nicht unterstützter Inhalt
+erscheint als `create-rejected` mit Diagnose; es erfolgt keine Datenkonversion
+in ein anderes Profil und kein stiller Rückfall auf IOM.
+
+[Rohwerte und Vergleich der WKB-Matrix](benchmarks/wkb/README.md).

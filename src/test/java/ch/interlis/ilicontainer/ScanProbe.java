@@ -6,10 +6,13 @@ import java.nio.file.*;
 
 public final class ScanProbe {
   public static void main(String[] args) throws Exception {
-    if (args.length == 3) {
+    if (args.length >= 3) {
       ch.interlis.ilicontainer.api.WriterOptions w =
           new ch.interlis.ilicontainer.api.WriterOptions();
       w.modelFiles.add(args[2]);
+      if (args.length == 4) w.geometryEncoding = args[3];
+      w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
+      w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
       w.sortMemoryBytes = 1024 * 1024;
       ch.interlis.ilicontainer.container.ContainerWriter.create(
           Paths.get(args[0]), Paths.get(args[1]), w);

@@ -58,7 +58,7 @@ Externe Sortierung verwendet begrenzte Runs und höchstens 32 gleichzeitig zusam
 
 Ein R-Baum wird nach der X-Untergrenze gepackt; bis zu 64 Einträge pro Blatt/Zweig. Blätter speichern konservative XY-Bounding-Boxes und physische Objektadressen. Das Manifest ordnet Klasse und Geometrieattribut einer Wurzel, einem CRS, den Achsen `C1,C2` und der Objektzahl zu.
 
-Kreisbögen werden analytisch umschlossen, ohne Linearisierung. Der Kurvenbaustein von iox-ili prüft die Berechenbarkeit. Orientierung und Zugehörigkeit der vier Achsenextrema werden zusätzlich mit exakten Dezimaloperationen bestimmt; Mittelpunkt und Radius erhalten nach aussen gerundete rationale beziehungsweise Dezimalgrenzen. Koordinatengrenzen werden nach aussen gerundet. Instabile/degenerierte Bögen und Bögen mit explizitem R-Attribut werden derzeit für die Indexierung ausdrücklich abgelehnt; ihre Core-Kodierung bleibt erhalten. Fehlende Geometrien erzeugen keinen Eintrag. Gemischte Basket-Domainzuordnungen werden nicht gemeinsam indexiert. Bei generischen Domainzuordnungen ist zusätzlich eine explizite CRS-Angabe erforderlich.
+Kreisbögen werden analytisch umschlossen, ohne Linearisierung. Die gemeinsame, IOM-unabhängige Geometrieberechnung prüft die Berechenbarkeit. Orientierung und Zugehörigkeit der vier Achsenextrema werden zusätzlich mit exakten Dezimaloperationen bestimmt; Mittelpunkt und Radius erhalten nach aussen gerundete rationale beziehungsweise Dezimalgrenzen. Koordinatengrenzen werden nach aussen gerundet. Nicht berechenbare Bögen und Bögen mit explizitem R-Attribut werden für die Indexierung ausdrücklich abgelehnt; ihre IOM-Core-Kodierung bleibt erhalten. Das WKB-Profil lehnt solche Inhalte bereits bei der Erstellung ab. Fehlende Geometrien erzeugen keinen Eintrag. Gemischte Basket-Domainzuordnungen werden nicht gemeinsam indexiert. Bei generischen Domainzuordnungen ist zusätzlich eine explizite CRS-Angabe erforderlich.
 
 Kandidaten werden anhand der gespeicherten Objekt-Bounding-Boxes geprüft. Für deterministische Containerreihenfolge werden die Kandidatenpositionen extern sortiert. Dadurch bleibt der Speicher begrenzt; die erste Objektausgabe wartet jedoch auf die Indexauswertung und Sortierung. Keine exakte geometrische Intersects-Prüfung.
 
@@ -82,3 +82,42 @@ CRC32 dient der Erkennung von Beschädigungen, nicht der Authentifizierung. Der 
 Die Modellskala bleibt in `numericTypes` verfügbar. Die Dezimalvariante speichert trotzdem die tatsächliche Mantisse und Skala jedes Werts. Eine ausschliesslich aus dem Modell abgeleitete Skalierung würde bei ungeprüften Eingaben entweder runden oder einen zusätzlichen Ausnahmefall benötigen. Da die Erstellung keine vollständige Modellvalidierung voraussetzt, bleibt die explizite Skala der robuste erste Messpunkt. Native CBOR-Integer für Mantissen und das Weglassen wiederholter Modellskalen sind weitere Kompressionsoptimierungen; sie sind nicht Bestandteil von Dateiformat 1.
 
 Die Reihenfolge der Modell-/Quellprovenienzlisten kann von der Auflösungsreihenfolge des Compilers abhängen. Sie hat keine Transfersemantik; byteidentische Container über getrennte Erstellungen werden daher noch nicht zugesagt. Der abschliessende Neuaufbau der grossen 256-KiB-Standardvariante ergab identische Daten-/Verzeichnisframes und identische Metadaten nach Sortierung dieser Provenienzlisten.
+
+## Format 2: WKB-Profil
+
+Die Magic Bytes, Abschnittstypen und die Grössen von Header und Footer bleiben
+unverändert. Header und Footer tragen Versionsnummer 2 und müssen übereinstimmen.
+Der Footer verweist weiterhin auf das gemeinsame Verzeichnis und das optionale
+Spatial-Manifest. Unbekannte Versionen/Profile werden abgelehnt.
+
+Metadaten ergänzen `geometryEncoding=wkb`, `geometryProfile=wkb-iso-v1`,
+`geometries` (nach qualifiziertem Attributpfad), `scalarTypes` und
+`concreteClasses`. Geometriedeskriptoren enthalten Modelltyp, Dimension,
+Minima/Maxima/Genauigkeiten, Linienformen, Richtung, Achsen, Domain und CRS.
+`mappingVersion=1` bezeichnet weiterhin die rekonstruierbare IOX-Writerabbildung.
+
+An der Position eines Geometriewerts steht eine CBOR-Map:
+
+```
+{"geometry": "Model.Topic.Class.Attribute", "root": "MULTISURFACE", "wkb": h'...'}
+```
+
+`geometry` referenziert den Modelldeskriptor, `root` die IOM-Wurzelform für die
+Rekonstruktion. `wkb` ist eine binäre ISO-WKB-Geometrie, kein IOM-Baum.
+Die expliziten Schlüssel unterscheiden diesen Wert von Dezimalmaps (`m`, `s`),
+Objektarrays und Blackboxes. Die Ersetzung erfolgt auch in Strukturen.
+
+Chunk-Metadaten enthalten zusätzlich `firstFid`, die globale nullbasierte
+Objektordinalzahl des ersten Objekts. FID = `firstFid + Objektordinal im Chunk`.
+Das bestehende B+-Baum-Verzeichnis enthält `F\0<20-stellige FID>` mit derselben
+Location-Struktur wie der TID-Index. Dadurch ist kein zusätzlicher Footerzeiger
+nötig. FID-Einträge werden extern sortiert und seitenweise gelesen.
+
+Format-1-Erstellung lässt die neuen Metadatenfelder und `firstFid` weg. Bei der
+Lektüre alter Dateien gelten die Defaults `geometryEncoding=iom` und kein FID.
+Es gibt keine automatische Dateimigration.
+
+Der neutrale Objektcursor liefert CBOR-Records wahlweise direkt oder als IOM.
+GIS-Zugriff und WKB-Indexaufbau verwenden den direkten Weg. Die Geometriekodierung
+und analytische Umhüllung benötigen weder Hop noch LocationTech JTS. Details und
+Profilgrenzen stehen in [WKB.md](WKB.md).

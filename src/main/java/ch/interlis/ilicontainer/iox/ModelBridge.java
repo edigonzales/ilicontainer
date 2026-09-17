@@ -16,10 +16,12 @@ import java.util.*;
 public final class ModelBridge {
   public final TransferMetadata metadata;
   public final TransferDescription model;
+  private final Map<String, String> configuredGeometryCrs;
 
   private ModelBridge(TransferMetadata m, TransferDescription td) {
     metadata = m;
     model = td;
+    configuredGeometryCrs = new TreeMap<String, String>(m.geometryCrs);
   }
 
   public static ModelBridge load(Path input, WriterOptions options, Path temp) throws Exception {
@@ -37,6 +39,8 @@ public final class ModelBridge {
     meta.sender = start.getSender();
     meta.comment = start.getComment();
     meta.numericEncoding = options.numericEncoding;
+    meta.geometryEncoding = options.geometryEncoding;
+    if ("wkb".equals(options.geometryEncoding)) meta.geometryProfile = "wkb-iso-v1";
     if (meta.comment != null && meta.comment.contains("IliContainer fragment"))
       throw new IOException("A marked fragment cannot be imported as a FULL transfer");
     if (start.getHeaderObjects() != null) {
@@ -68,6 +72,17 @@ public final class ModelBridge {
       throw new IOException("Expected INTERLIS 2.4 model mapping");
     meta.xmlNames.putAll(mapping.getXtf24nameMapping());
     collect(td, mapping, meta);
+    for (Map.Entry<String, String> entry : options.geometryCrs.entrySet()) {
+      TransferMetadata.GeometryDescriptor g = meta.geometries.get(entry.getKey());
+      if (g == null || entry.getValue().trim().isEmpty())
+        throw new IOException("Unknown/empty geometry CRS: " + entry.getKey());
+      if (g.crs != null
+          && !g.crs.isEmpty()
+          && !g.crs.replace(" ", "").equalsIgnoreCase(entry.getValue().replace(" ", "")))
+        throw new IOException("Explicit CRS conflicts with model: " + entry.getKey());
+      g.crs = entry.getValue();
+      meta.geometryCrs.put(entry.getKey(), g.crs);
+    }
     Map<String, String> digests = new HashMap<String, String>();
     for (Iterator<?> it = td.iterator(); it.hasNext(); ) {
       Object next = it.next();
@@ -144,6 +159,10 @@ public final class ModelBridge {
           props.add(v);
         }
         meta.classes.put(tag, props);
+        if (e instanceof AbstractClassDef
+            && !((AbstractClassDef) e).isAbstract()
+            && (!(e instanceof Table) || ((Table) e).isIdentifiable()))
+          meta.concreteClasses.add(tag);
         Iterator<?> attrs = ((Viewable) e).getAttributesAndRoles2();
         while (attrs.hasNext()) {
           ViewableTransferElement ve = (ViewableTransferElement) attrs.next();
@@ -158,6 +177,18 @@ public final class ModelBridge {
                       ((NumericType) type).getMinimum() == null
                           ? 0
                           : ((NumericType) type).getMinimum().getAccuracy()));
+            if (!(type instanceof CompositionType)
+                && !(type instanceof ReferenceType)
+                && !(type instanceof BlackboxType))
+              meta.scalarTypes.put(
+                  key,
+                  type.isBoolean()
+                      ? "boolean"
+                      : type instanceof NumericType
+                          ? (Integer.parseInt(meta.numericTypes.get(key)) == 0
+                              ? "integer"
+                              : "decimal")
+                          : type.getClass().getSimpleName());
             AbstractCoordType coord = null;
             if (type instanceof AbstractCoordType) coord = (AbstractCoordType) type;
             else if (type instanceof LineType) {
@@ -168,12 +199,78 @@ public final class ModelBridge {
             if (coord != null) {
               String crs = coord.getCrs(a);
               meta.geometryCrs.put(key, crs == null ? "" : crs);
+              meta.scalarTypes.remove(key);
+              TransferMetadata.GeometryDescriptor g = new TransferMetadata.GeometryDescriptor();
+              g.type = type.getClass().getSimpleName();
+              g.dimension = coord.getDimensions().length;
+              g.crs = crs == null ? "" : crs;
+              g.generic = coord.isGeneric();
+              g.nullAxis = coord.getNullAxis();
+              g.piHalfAxis = coord.getPiHalfAxis();
+              g.multiSurface = type instanceof MultiSurfaceType || type instanceof MultiAreaType;
+              g.directed =
+                  type instanceof PolylineType
+                      ? ((PolylineType) type).isDirected()
+                      : type instanceof MultiPolylineType
+                          && ((MultiPolylineType) type).isDirected();
+              for (NumericalType axis : coord.getDimensions()) {
+                NumericType n = axis instanceof NumericType ? (NumericType) axis : null;
+                g.minimum.add(
+                    n == null || n.getMinimum() == null ? null : n.getMinimum().toString());
+                g.maximum.add(
+                    n == null || n.getMaximum() == null ? null : n.getMaximum().toString());
+                g.accuracy.add(
+                    n == null || n.getMinimum() == null ? null : n.getMinimum().getAccuracy());
+              }
+              if (type instanceof LineType) {
+                LineType line = (LineType) type;
+                g.domain = line.getControlPointDomain().getScopedName(null);
+                for (LineForm f : line.getLineForms()) g.lineForms.add(f.getName());
+              } else if (a.getDomain() instanceof TypeAlias)
+                g.domain = ((TypeAlias) a.getDomain()).getAliasing().getScopedName(null);
+              meta.geometries.put(key, g);
             }
           }
         }
       }
       if (e instanceof ch.interlis.ili2c.metamodel.Container && !(e instanceof PredefinedModel))
         collect((ch.interlis.ili2c.metamodel.Container<?>) e, mapping, meta);
+    }
+  }
+
+  public void resolveGeometryCrs(IomObject object, BasketContext basket) throws IOException {
+    for (int i = 0; i < object.getattrcount(); i++) {
+      String attr = object.getattrname(i), key = object.getobjecttag() + "." + attr;
+      TransferMetadata.GeometryDescriptor g = metadata.geometries.get(key);
+      if (g != null && object.getattrvaluecount(attr) > 0) {
+        String assigned = g.domain == null ? null : basket.domains.get(g.domain);
+        String configured = configuredGeometryCrs.get(key);
+        boolean hasConfigured = configured != null && !configured.isEmpty();
+        if (g.generic && assigned == null && !hasConfigured)
+          throw new IOException("Unresolved CRS for basket domain: " + key);
+        if (assigned != null) {
+          Element e = model.getElement(assigned);
+          if (!(e instanceof Domain)
+              || !(((Domain) e).getType().resolveAliases() instanceof AbstractCoordType))
+            throw new IOException("Unknown basket coordinate domain " + assigned);
+          String crs = ((AbstractCoordType) ((Domain) e).getType().resolveAliases()).getCrs(e);
+          if ((crs == null || crs.isEmpty()) && !hasConfigured)
+            throw new IOException(
+                "Unresolved CRS for assigned basket domain " + assigned + ": " + key);
+          if (crs != null && !crs.isEmpty()) {
+            if (g.crs != null
+                && !g.crs.isEmpty()
+                && !g.crs.replace(" ", "").equalsIgnoreCase(crs.replace(" ", "")))
+              throw new IOException("Mixed/conflicting basket CRS: " + key);
+            g.crs = crs;
+            metadata.geometryCrs.put(key, crs);
+          }
+        }
+      } else if (g == null)
+        for (int j = 0; j < object.getattrvaluecount(attr); j++) {
+          IomObject child = object.getattrobj(attr, j);
+          if (child != null) resolveGeometryCrs(child, basket);
+        }
     }
   }
 

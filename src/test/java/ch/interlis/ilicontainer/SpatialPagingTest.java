@@ -12,7 +12,14 @@ import java.util.stream.Collectors;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
+@org.junit.runner.RunWith(org.junit.runners.Parameterized.class)
 public class SpatialPagingTest {
+  @org.junit.runners.Parameterized.Parameters(name = "geometry={0}")
+  public static Collection<Object[]> encodings() {
+    return Arrays.asList(new Object[][] {{"iom"}, {"wkb"}});
+  }
+
+  @org.junit.runners.Parameterized.Parameter public String geometryEncoding;
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   @Test
@@ -40,6 +47,8 @@ public class SpatialPagingTest {
       out.write("</Tiny:Data></ili:datasection></ili:transfer>");
     }
     WriterOptions o = new WriterOptions();
+    o.geometryEncoding = geometryEncoding;
+    o.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
     o.modelFiles.add(ContainerTest.fixture("Tiny.ili").toString());
     o.chunkSize = 16384;
     o.embedModels = true;
@@ -57,6 +66,12 @@ public class SpatialPagingTest {
             expected,
             f.objects().map(v -> v.getObject().getobjectoid()).collect(Collectors.toSet()));
       }
+      if ("wkb".equals(geometryEncoding))
+        try (GisLayer layer = c.openLayer("Tiny.Data.Item.point");
+            java.util.stream.Stream<GisFeature> features =
+                layer.queryCandidates(new BoundingBox(10, 10, 20, 20))) {
+          assertEquals(expected, features.map(GisFeature::getTid).collect(Collectors.toSet()));
+        }
       assertTrue(c.metrics().indexPages > 1);
       assertTrue(c.metrics().chunksRead < 121);
       try (Fragment f =

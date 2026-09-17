@@ -57,3 +57,8 @@ tasks.register('benchmark', JavaExec) {
 test {
     systemProperty 'ilic.test.classpath', sourceSets.test.runtimeClasspath.asPath
 }
+
+// Preserve source attribution in all delivered library artifacts.
+tasks.withType(Jar).configureEach {
+    from('THIRD_PARTY.md') { into 'META-INF' }
+}

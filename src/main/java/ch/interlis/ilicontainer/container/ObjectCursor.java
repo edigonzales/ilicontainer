@@ -11,11 +11,13 @@ public final class ObjectCursor implements CloseableIterator<IomObject> {
   private final JsonParser parser;
   private final ObjectCodec codec;
   private int remaining;
+  public final long firstFid;
 
   public ObjectCursor(Chunk chunk, ObjectCodec codec) throws IOException {
     parser = Cbor.MAPPER.getFactory().createParser(chunk.objects);
     this.codec = codec;
     remaining = chunk.info.count;
+    firstFid = chunk.info.firstFid == null ? -1 : chunk.info.firstFid;
   }
 
   public boolean hasNext() {
@@ -23,15 +25,23 @@ public final class ObjectCursor implements CloseableIterator<IomObject> {
   }
 
   public IomObject next() {
+    try {
+      return codec.object(nextRecord());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  public JsonNode nextRecord() {
     if (!hasNext()) throw new NoSuchElementException();
     try {
       JsonNode node = Cbor.MAPPER.readTree(parser);
       if (node == null) throw new EOFException("Too few objects in chunk");
-      IomObject o = codec.object(node);
+
       remaining--;
       if (remaining == 0 && parser.nextToken() != null)
         throw new IOException("Too many objects in chunk");
-      return o;
+      return node;
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }

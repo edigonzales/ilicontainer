@@ -5,6 +5,7 @@ Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren
 - [Architektur und Prototyp-Spezifikation v0.3](ilicontainer-architektur-prototyp-spezifikation-v0.3.md)
 - [Experimentelles Dateiformat und Implementierungsdetails](docs/FORMAT.md)
 - [Implementierung und Abnahmenachweise](docs/IMPLEMENTATION.md)
+- [Optionales WKB-Profil und direkte GIS-API](docs/WKB.md)
 - [Benchmarks und Reproduktion](docs/BENCHMARKS.md)
 
 ## Build und Tests

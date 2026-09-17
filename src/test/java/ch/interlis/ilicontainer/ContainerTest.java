@@ -16,7 +16,21 @@ import java.util.stream.*;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
+@org.junit.runner.RunWith(org.junit.runners.Parameterized.class)
 public class ContainerTest {
+  @org.junit.runners.Parameterized.Parameters(name = "geometry={0}")
+  public static java.util.Collection<Object[]> encodings() {
+    return java.util.Arrays.asList(new Object[][] {{"iom"}, {"wkb"}});
+  }
+
+  @org.junit.runners.Parameterized.Parameter public String geometryEncoding;
+
+  private void geometryOptions(WriterOptions w) {
+    w.geometryEncoding = geometryEncoding;
+    w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
+    w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
+  }
+
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   static Path fixture(String name) {
@@ -25,6 +39,7 @@ public class ContainerTest {
 
   WriterOptions options() {
     WriterOptions o = new WriterOptions();
+    geometryOptions(o);
     o.modelFiles.add(fixture("Tiny.ili").toAbsolutePath().toString());
     o.modelPaths.add(fixture("Tiny.ili").toAbsolutePath().getParent().toString());
     return o;

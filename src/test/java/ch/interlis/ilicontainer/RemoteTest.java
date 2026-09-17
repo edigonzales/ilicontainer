@@ -10,11 +10,26 @@ import java.nio.file.*;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
+@org.junit.runner.RunWith(org.junit.runners.Parameterized.class)
 public class RemoteTest {
+  @org.junit.runners.Parameterized.Parameters(name = "geometry={0}")
+  public static java.util.Collection<Object[]> encodings() {
+    return java.util.Arrays.asList(new Object[][] {{"iom"}, {"wkb"}});
+  }
+
+  @org.junit.runners.Parameterized.Parameter public String geometryEncoding;
+
+  private void geometryOptions(WriterOptions w) {
+    w.geometryEncoding = geometryEncoding;
+    w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
+    w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
+  }
+
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   Path create() throws Exception {
     WriterOptions o = new WriterOptions();
+    geometryOptions(o);
     o.modelFiles.add(ContainerTest.fixture("Tiny.ili").toString());
     Path target = tmp.getRoot().toPath().resolve("data.ilic");
     ContainerWriter.create(ContainerTest.fixture("tiny.xtf"), target, o);
@@ -86,6 +101,7 @@ public class RemoteTest {
     text = text.replace("Grüezi", String.join("", java.util.Collections.nCopies(100000, "abc")));
     Files.write(input, text.getBytes("UTF-8"));
     WriterOptions options = new WriterOptions();
+    geometryOptions(options);
     options.modelFiles.add(ContainerTest.fixture("Tiny.ili").toString());
     options.compression = "none";
     ContainerWriter.create(input, source, options);

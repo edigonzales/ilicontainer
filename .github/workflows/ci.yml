@@ -14,3 +14,9 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew build installDist
+      - name: Install independent GDAL verifier
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-gdal
+      - name: Verify ISO-WKB with GDAL
+        if: runner.os == 'Linux'
+        run: /usr/bin/python3 scripts/verify-wkb-gdal.py

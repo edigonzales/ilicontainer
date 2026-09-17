@@ -8,6 +8,11 @@ import java.util.zip.*;
 public final class Chunk {
   public static final class Info {
     public long id, basketPosition, basketOffset;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(
+        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public Long firstFid;
+
     public String className, topic, bid, compression;
     public int count;
     public long uncompressedLength;

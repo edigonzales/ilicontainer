@@ -83,6 +83,12 @@ public final class Main implements Runnable {
     @Option(names = "--numeric-encoding", defaultValue = "lexical")
     String numeric;
 
+    @Option(names = "--geometry-encoding", defaultValue = "iom")
+    String geometry;
+
+    @Option(names = "--geometry-crs", description = "Class.Attribute=CRS; repeatable")
+    Map<String, String> geometryCrs = new TreeMap<String, String>();
+
     @Option(
         names = "--spatial",
         description = "Fully qualified class plus geometry attribute, separated by a colon.")
@@ -101,6 +107,8 @@ public final class Main implements Runnable {
       o.compression = compression;
       o.compressionLevel = level;
       o.numericEncoding = numeric;
+      o.geometryEncoding = geometry;
+      o.geometryCrs.putAll(geometryCrs);
       ContainerWriter.create(input, output, o);
       for (String index : indexes) {
         String[] p = index.split(":", 2);
@@ -137,7 +145,10 @@ public final class Main implements Runnable {
     public Integer call() throws Exception {
       try (IliContainer c = open()) {
         Map<String, Object> info = new LinkedHashMap<String, Object>();
-        info.put("formatVersion", Frames.VERSION);
+        info.put("formatVersion", c.metadata().formatVersion());
+        info.put("geometryEncoding", c.metadata().geometryEncoding);
+        info.put("geometryProfile", c.metadata().geometryProfile);
+        info.put("geometries", c.metadata().geometries);
         info.put("transferVersion", c.metadata().version);
         info.put("bytes", c.size());
         info.put("models", c.metadata().models);
