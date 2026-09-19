@@ -1,4 +1,3 @@
-import json
 from html import escape
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
@@ -8,12 +7,10 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
-    QTreeWidget,
-    QTreeWidgetItem,
     QFileDialog,
-    QMessageBox,
 )
 from .tasks import submit
+from .object_tree import ObjectTree
 
 
 class ObjectBrowser(QDockWidget):
@@ -27,7 +24,6 @@ class ObjectBrowser(QDockWidget):
         self.show_full_history = False
         self.generation = 0
         self.task = None
-        self.related_task = None
         root = QWidget()
         layout = QVBoxLayout(root)
         nav = QHBoxLayout()
@@ -57,11 +53,11 @@ class ObjectBrowser(QDockWidget):
         self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Eigenschaft", "Inhalt"])
-        self.tree.setAlternatingRowColors(True)
-        self.tree.setColumnWidth(0, 185)
-        self.tree.itemClicked.connect(self.activate)
+        self.tree = ObjectTree()
+        self.tree.openRequested.connect(
+            lambda dataset, args: self.open(dataset, **args)
+        )
+        self.tree.geometryRequested.connect(self.layers.show_geometry)
         layout.addWidget(self.tree)
         actions = QHBoxLayout()
         self.map_button = QPushButton("Auf Karte zeigen")
@@ -74,7 +70,7 @@ class ObjectBrowser(QDockWidget):
             actions.addWidget(w)
         layout.addLayout(actions)
         self.setWidget(root)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(560)
         self.buttons()
 
     def buttons(self):
@@ -95,7 +91,8 @@ class ObjectBrowser(QDockWidget):
 
     def abort(self):
         self.generation += 1
-        for task in [self.task, self.related_task]:
+        self.tree.cancel_requests()
+        for task in [self.task]:
             if task:
                 task.cancel()
         self.status.setText("Abgebrochen. Das bisherige Objekt bleibt geöffnet.")
@@ -125,7 +122,6 @@ class ObjectBrowser(QDockWidget):
             else:
                 self.position = history_position
             self.render()
-            self.load_related()
 
         self.task = submit(
             "IBX-Objekt lesen",
@@ -141,143 +137,14 @@ class ObjectBrowser(QDockWidget):
     def render(self):
         d, o = self.dataset, self.obj
         self.title.setText(d.title(o))
-        self.status.setText("Nur lesend · Strukturen aufklappen, Beziehungen anklicken")
+        self.status.setText("Pfeil: Angaben aufklappen · Öffnen: zum Objekt wechseln")
         self.render_history()
-        self.tree.clear()
-        self.fields(self.tree, o)
-        self.related = QTreeWidgetItem(
-            self.tree, ["Verknüpfte Objekte", "Wird geladen …"]
-        )
-        self.related.setExpanded(True)
-        tech = QTreeWidgetItem(self.tree, ["Technische Details", ""])
-        for name, value in [
-            ("Klasse", o["className"]),
-            ("TID", o.get("tid")),
-            ("Basket", o["bid"]),
-            ("FID", o["fid"]),
-            ("Dateistand", d.state),
-        ]:
-            QTreeWidgetItem(
-                tech, [name, str(value) if value is not None else "Ohne eigene TID"]
-            )
+        self.tree.show_object(d, o)
         self.buttons()
 
-    def fields(self, parent, obj):
-        cls = obj["className"]
-        fields = obj.get("fields", {})
-        d = self.dataset
-        order = [p["name"] for p in d.meta["classes"].get(cls, [])]
-        order += [n for n in fields if n not in order]
-        for name in order:
-            values = fields.get(name)
-            label = d.label(cls + "." + name)
-            if values is None:
-                QTreeWidgetItem(parent, [label, "Nicht angegeben"])
-                continue
-            if not values:
-                QTreeWidgetItem(parent, [label, "Keine Einträge"])
-                continue
-            group = QTreeWidgetItem(
-                parent, [label, f"{len(values)} Einträge" if len(values) > 1 else ""]
-            )
-            for i, value in enumerate(values):
-                item = (
-                    QTreeWidgetItem(group, [f"Eintrag {i+1}", ""])
-                    if len(values) > 1
-                    else group
-                )
-                kind = value.get("kind")
-                if kind == "scalar":
-                    shown = value.get("value")
-                    definition = d.meta.get("definitions", {}).get(cls + "." + name, {})
-                    if value.get("type") == "boolean":
-                        shown = (
-                            "Ja"
-                            if shown == "true"
-                            else "Nein" if shown == "false" else shown
-                        )
-                    item.setText(
-                        1,
-                        (
-                            "Nicht angegeben"
-                            if shown is None
-                            else str(shown)
-                            + (
-                                (" " + definition["unit"])
-                                if definition.get("unit")
-                                else ""
-                            )
-                        ),
-                    )
-                elif kind == "reference":
-                    item.setText(1, "Verknüpftes Objekt öffnen →")
-                    item.setData(0, Qt.ItemDataRole.UserRole, ("reference", value))
-                    item.setToolTip(
-                        1,
-                        "Öffnet das Ziel in diesem Fenster; der Layer muss nicht geladen sein.",
-                    )
-                    if value.get("fields"):
-                        details = QTreeWidgetItem(item, ["Beziehungsdetails", ""])
-                        self.fields(details, value)
-                elif kind == "geometry":
-                    item.setText(1, "Auf Karte zeigen ↗")
-                    item.setData(0, Qt.ItemDataRole.UserRole, ("geometry", value))
-                else:
-                    self.fields(item, value)
-
-    def activate(self, item, column):
-        action = item.data(0, Qt.ItemDataRole.UserRole)
-        if not action:
-            return
-        kind, value = action
-        if kind == "reference":
-            self.open(self.dataset, tid=value["tid"], bid=value.get("bid"))
-        elif kind == "object":
-            self.open(self.dataset, fid=value)
-        elif kind == "geometry":
-            self.layers.show_geometry(self.dataset, value)
-        elif kind == "more":
-            self.related.takeChild(self.related.indexOfChild(item))
-            self.load_related(value)
-
-    def load_related(self, after=None):
-        d, o, g = self.dataset, self.obj, self.generation
-
-        def ready(page):
-            if g != self.generation:
-                return
-            if not page.get("indexed"):
-                self.related.setText(1, "Rückwärtsbeziehungen nicht indexiert")
-                return
-            self.related.setText(1, "")
-            for row in page["items"]:
-                obj = row["object"]
-                item = QTreeWidgetItem(self.related, [d.title(obj), "Objekt öffnen →"])
-                item.setData(0, Qt.ItemDataRole.UserRole, ("object", obj["fid"]))
-                path = row["path"].split("/")
-                role = path[-2] if len(path) > 1 else "Beziehung"
-                item.setToolTip(
-                    0, "Verknüpft über " + d.label(obj["className"] + "." + role)
-                )
-                if (
-                    d.meta.get("definitions", {}).get(obj["className"], {}).get("kind")
-                    == "association"
-                ):
-                    details = QTreeWidgetItem(item, ["Beziehungsdetails", ""])
-                    self.fields(details, obj)
-            if page.get("next"):
-                more = QTreeWidgetItem(self.related, ["Weitere anzeigen …", ""])
-                more.setData(0, Qt.ItemDataRole.UserRole, ("more", page["next"]))
-            if self.related.childCount() == 0:
-                self.related.setText(1, "Keine eingehenden Beziehungen")
-
-        self.related_task = submit(
-            "IBX-Beziehungen lesen",
-            lambda rid: d.call("related", fid=o["fid"], after=after, requestId=rid),
-            ready,
-            self.error,
-            d.rpc,
-        )
+    def closeEvent(self, event):
+        self.abort()
+        super().closeEvent(event)
 
     def render_history(self):
         start = 0 if self.show_full_history else max(0, self.position - 3)

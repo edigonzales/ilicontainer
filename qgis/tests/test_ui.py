@@ -158,10 +158,7 @@ class GuiTests(unittest.TestCase):
             Qt.MouseButton.LeftButton,
             pos=QPoint(round(pixel.x()), round(pixel.y())),
         )
-        wait_until(
-            lambda: browser.obj is not None
-            and browser.related.text(1) != "Wird geladen …"
-        )
+        wait_until(lambda: browser.obj is not None and browser.tree.relations.complete)
         self.assertEqual("Haus am Park 1", browser.title.text())
         self.assertEqual(1, len(QgsProject.instance().mapLayers()))
         pixel = iface.canvas.getCoordinateTransform().transform(2600035, 1200035)
@@ -184,13 +181,48 @@ class GuiTests(unittest.TestCase):
         QTest.qWait(100)
         Path("build/qgis").mkdir(parents=True, exist_ok=True)
         iface.window.grab().save("build/qgis/object-browser.png")
+
+        # Real Java-backed inline access: one selected target, no recursive reads.
+        def top(name):
+            return next(
+                browser.tree.topLevelItem(i)
+                for i in range(browser.tree.topLevelItemCount())
+                if browser.tree.topLevelItem(i).text(0) == name
+            )
+
+        order = top("Unterhaltsauftrag")
+        before_chunks = dataset.call("metrics")["chunksRead"]
+        with patch.object(dataset, "call", wraps=dataset.call) as calls:
+            order.setExpanded(True)
+            wait_until(lambda: order.state == "loaded")
+            self.assertEqual(["object"], [c.args[0] for c in calls.call_args_list])
+            order.setExpanded(False)
+            order.setExpanded(True)
+            self.assertEqual(1, calls.call_count)
+        self.assertEqual(0, browser.position)
+        self.assertLessEqual(dataset.call("metrics")["chunksRead"] - before_chunks, 1)
+        duty = top("Zuständigkeit · Organisation").child(0)
+        with patch.object(dataset, "call", wraps=dataset.call) as calls:
+            duty.setExpanded(True)
+            self.assertEqual(0, calls.call_count)
+            details = duty.child(0)
+            self.assertEqual("Angaben zur Zuständigkeit", details.text(0))
+            self.assertEqual(
+                {"Funktion", "Gueltig Ab"},
+                {details.child(i).text(0) for i in range(details.childCount())},
+            )
+            content = duty.child(1)
+            content.setExpanded(True)
+            wait_until(lambda: content.state == "loaded")
+            self.assertEqual(["object"], [c.args[0] for c in calls.call_args_list])
+        self.assertEqual(0, browser.position)
+        iface.window.grab().save("build/qgis/inline-demo.png")
         browser.open(dataset, tid="auftrag0")
         wait_until(
-            lambda: browser.obj["tid"] == "auftrag0"
-            and browser.related.text(1) != "Wird geladen …"
+            lambda: browser.obj["tid"] == "auftrag0" and browser.tree.relations.complete
         )
         self.assertEqual(1, len(QgsProject.instance().mapLayers()))
-        self.assertEqual(7, browser.related.childCount())
+        self.assertEqual(7, browser.tree.relations.edge_count)
         browser.open(dataset, tid="anlage0")
         wait_until(lambda: browser.obj["tid"] == "anlage0")
         browser.show_map()

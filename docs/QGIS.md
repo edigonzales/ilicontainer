@@ -34,12 +34,37 @@ Instanzen im Katalog enthalten sind.
 Mit **IBX-Objekt erkunden** ein Gebäude anklicken. Im Objektfenster:
 
 1. Kontrollen und Messungen aufklappen.
-2. Unterhaltsauftrag öffnen. Der Auftrag muss nicht als Layer geladen sein.
-3. Unter „Verknüpfte Objekte“ einen Spielplatz öffnen.
+2. Unterhaltsauftrag mit dem Baumpfeil aufklappen. Seine Angaben erscheinen im
+   Haus; das Haus bleibt Hauptobjekt. Mit **Öffnen →** in der Aktionsspalte zum
+   Auftrag wechseln. Der Auftrag muss nicht als Layer geladen sein.
+3. Unter **Arbeit · Betroffene Objekte** einen Spielplatz aufklappen oder öffnen.
 4. „Auf Karte zeigen“ lädt bei Bedarf den passenden Layer und hebt das Objekt hervor.
 5. Mit „Zurück“ zum Auftrag und Gebäude zurückkehren.
 6. „Originalobjekte exportieren“ exportiert das aktuelle Objekt und markierte
    Objekte derselben Quelle, dedupliziert über ihre FID, als XTF-Fragment.
+
+Die Spalten **Eigenschaft · Inhalt · Aktion** trennen Angaben von Bedienung.
+Ein Klick auf den Inhalt markiert nur die Zeile. Der Baumpfeil lädt das Ziel erst
+bei Bedarf; **Öffnen →** macht es zum Hauptobjekt. Die Eingabetaste führt die
+Aktion der markierten Zeile aus, Rechts/Links klappt auf/zu. Das Kontextmenü
+bietet Aktionen und **Kopieren**; Strukturen bleiben Teile desselben Objekts.
+
+Bei **Zuständigkeit · Organisation** stehen Funktion und Gültigkeit unter
+**Angaben zur Zuständigkeit**. Die Organisationsangaben werden separat
+aufgeklappt. **Öffnen →** führt zur Organisation; **Assoziation öffnen** im
+Kontextmenü öffnet die vollständige Zuständigkeitsinstanz. Verschiedene
+Zuständigkeiten zum gleichen Ziel bleiben getrennt. Assoziationen mit mehr als
+zwei Rollen behalten alle Rollen in einer gemeinsamen Ansicht.
+
+**Noch nicht geladen** bedeutet, dass noch kein Zugriff auf das Ziel erfolgt ist.
+**Weitere Angaben zum Objekt → Laden** liest die erste Seite seiner eingehenden
+Beziehungen. **Weitere Einträge laden** holt jeweils höchstens 50 Indexeinträge;
+„geladen“ kennzeichnet vorläufige Mengen. Fehlende Indizes und fehlende Ziele
+werden ausdrücklich angezeigt. Fehler lassen sich an der betroffenen Zeile
+wiederholen. Ein bereits übergeordnetes Objekt erscheint als **Bereits weiter
+oben angezeigt**; die Aktion springt zu dieser Darstellung. Aufklappen verändert
+den Besuchsverlauf nicht. Karte, Tabelle und Export unten beziehen sich auf das
+Hauptobjekt. Technische Details sind optisch abgesetzt und weiterhin kopierbar.
 
 Der **Besuchsverlauf** zeigt die Reihenfolge geöffneter Objekte, keine Hierarchie.
 Nummerierte Links öffnen frühere Besuche; das aktuelle Objekt ist fett markiert.
@@ -115,7 +140,10 @@ Lastdaten bleiben unter `build/`; ein normaler Build verändert kein QGIS-Profil
 ./gradlew test build installDist
 scripts/qgis-python.sh qgis/tests/test_provider.py -v
 scripts/qgis-python.sh qgis/tests/test_ui.py -v
+scripts/qgis-python.sh qgis/tests/test_presentation.py -v
+scripts/qgis-python.sh qgis/tests/test_object_tree.py -v
 scripts/qgis-python.sh qgis/tests/test_https.py -v
+python3 scripts/verify-qgis-package.py
 python3 scripts/verify-large.py                 # 100'000 Gebäude
 python3 scripts/verify-large.py --size 1000000  # optional
 ```
