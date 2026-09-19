@@ -1,6 +1,6 @@
-# Experimentelles Dateiformat 3
+# Experimentelles Dateiformat 4
 
-Diese Beschreibung konkretisiert die Architektur-Spezifikation v0.3. Reader und Writer unterstützen **ausschliesslich Format 3**, für IOM und WKB. Dateien der Formate 1 und 2 werden ausdrücklich abgelehnt und müssen aus dem ursprünglichen XTF neu erstellt werden. Es gibt keine Migration und keine Formatversionsoption. Die Formatversion ist unabhängig von der Spezifikationsversion; langfristige Binärkompatibilität ist noch nicht zugesagt.
+Diese Beschreibung konkretisiert die Architektur-Spezifikation v0.3. Reader und Writer unterstützen **ausschliesslich Format 4**, für IOM und WKB. Dateien der IliContainer-Formate 1, 2 und 3 werden ausdrücklich abgelehnt und müssen aus dem ursprünglichen XTF neu erstellt werden. Es gibt keine Migration und keine Formatversionsoption. Die Formatversion ist unabhängig von der Spezifikationsversion; langfristige Binärkompatibilität ist noch nicht zugesagt.
 
 ## Aufbau
 
@@ -8,7 +8,7 @@ Alle festen Zahlenfelder verwenden Big Endian. Offsets sind absolute, nichtnegat
 
 | Abschnitt | Darstellung |
 |---|---|
-| Header, 16 Bytes | Magic `ILICONT1` (8), Version (4), erforderliche Featurebits (4; derzeit 0) |
+| Header, 16 Bytes | Magic `IBXCONT1` (8), Version (4), erforderliche Featurebits (4; derzeit 0) |
 | Metadaten | CBOR mit versionierter Modellabbildung, Dictionary und Transfermetadaten |
 | Datenbereich | Je Basket Metadaten, null oder mehr Chunks, Basketende; danach Transferende |
 | Verzeichnisse | Unveränderlicher B+-Baum, Überlaufbereiche |
@@ -17,7 +17,7 @@ Alle festen Zahlenfelder verwenden Big Endian. Offsets sind absolute, nichtnegat
 
 Ein Frame besteht aus Typ (4 Bytes), Nutzdatenlänge (8), CRC32 der Nutzdaten (4) und Nutzdaten. Typen: Metadaten 1, Basket 2, Chunk 3, Basketende 4, Transferende 5, Indexblatt 6, Indexzweig 7, räumliches Blatt 8, räumlicher Zweig 9, Spatial-Manifest 10, Überlauf 11. Unbekannte erforderliche Features und unerwartete Frame-Typen werden abgelehnt.
 
-Der sequenzielle Reader benötigt nur Header, Metadaten und Datenbereich. Er endet am Transferende und prüft dabei Daten-Frame-Prüfsummen; er validiert nicht nachgelagerte Verzeichnisse oder den Footer. `IliContainer.open` prüft zusätzlich den Footer. Indexseiten werden beim Zugriff geprüft.
+Der sequenzielle Reader benötigt nur Header, Metadaten und Datenbereich. Er endet am Transferende und prüft dabei Daten-Frame-Prüfsummen; er validiert nicht nachgelagerte Verzeichnisse oder den Footer. `IbxContainer.open` prüft zusätzlich den Footer. Indexseiten werden beim Zugriff geprüft.
 
 ## Modellabbildung und Objekte
 
@@ -77,11 +77,11 @@ CRC32 dient der Erkennung von Beschädigungen, nicht der Authentifizierung. Der 
 
 ## Zahlenkodierung: Entscheidung im Prototyp
 
-Die Modellskala bleibt in `numericTypes` verfügbar. Die Dezimalvariante speichert trotzdem die tatsächliche Mantisse und Skala jedes Werts. Eine ausschliesslich aus dem Modell abgeleitete Skalierung würde bei ungeprüften Eingaben entweder runden oder einen zusätzlichen Ausnahmefall benötigen. Da die Erstellung keine vollständige Modellvalidierung voraussetzt, bleibt die explizite Skala der robuste erste Messpunkt. Native CBOR-Integer für Mantissen und das Weglassen wiederholter Modellskalen sind weitere Kompressionsoptimierungen; sie sind nicht Bestandteil von Dateiformat 3.
+Die Modellskala bleibt in `numericTypes` verfügbar. Die Dezimalvariante speichert trotzdem die tatsächliche Mantisse und Skala jedes Werts. Eine ausschliesslich aus dem Modell abgeleitete Skalierung würde bei ungeprüften Eingaben entweder runden oder einen zusätzlichen Ausnahmefall benötigen. Da die Erstellung keine vollständige Modellvalidierung voraussetzt, bleibt die explizite Skala der robuste erste Messpunkt. Native CBOR-Integer für Mantissen und das Weglassen wiederholter Modellskalen sind weitere Kompressionsoptimierungen; sie sind nicht Bestandteil von Dateiformat 4.
 
-Die Reihenfolge der Modell-/Quellprovenienzlisten kann von der Auflösungsreihenfolge des Compilers abhängen. Sie hat keine Transfersemantik; byteidentische Container über getrennte Erstellungen werden daher noch nicht zugesagt. Der abschliessende Neuaufbau der grossen 256-KiB-Standardvariante ergab identische Daten-/Verzeichnisframes und identische Metadaten nach Sortierung dieser Provenienzlisten.
+Die Reihenfolge der Modell-/Quellprovenienzlisten kann von der Auflösungsreihenfolge des Compilers abhängen. Sie hat keine Transfersemantik; byteidentische Container über getrennte Erstellungen werden nicht zugesagt. Der abschliessende Neuaufbau der grossen 256-KiB-Standardvariante ergab identische Daten-/Verzeichnisframes und identische Metadaten nach Sortierung dieser Provenienzlisten.
 
-## WKB-Profil in Format 3
+## WKB-Profil in Format 4
 
 Metadaten ergänzen `geometryEncoding=wkb`, `geometryProfile=wkb-iso-v1`,
 `geometries` (nach qualifiziertem Attributpfad), `scalarTypes` und
@@ -109,10 +109,10 @@ GIS-Zugriff und WKB-Indexaufbau verwenden den direkten Weg. Die Geometriekodieru
 und analytische Umhüllung benötigen weder Hop noch LocationTech JTS. Details und
 Profilgrenzen stehen in [WKB.md](WKB.md).
 
-## Format 3 — verbindliche Bytebelegung
+## Format 4 — verbindliche Bytebelegung
 
-Format 3 ersetzt die Formate 1 und 2. Der 16-Byte-Header behält Familien-Magic,
-Versionsfeld (3) und Featurefeld (0). Frames behalten Typ i32, Nutzlänge i64,
+Format 4 ersetzt die IliContainer-Formate 1, 2 und 3. Der 16-Byte-Header verwendet die neue IBX-Familien-Magic,
+Versionsfeld (4) und Featurefeld (0). Frames behalten Typ i32, Nutzlänge i64,
 CRC32 i32 und Nutzdaten. Alle binären Felder sind Big Endian, ausgenommen WKB.
 Eine FrameRef besteht aus Offset i64 und vollständiger Framelänge i64.
 
@@ -148,3 +148,45 @@ Framelängen; Blatt-Locations werden als binäre 53-Byte-Werte gespeichert.
 HTTP beginnt mit einer einzigen 16-Byte-Headeranfrage. Bekannte Frames werden mit einer Anfrage einschliesslich CRC geladen. Räumliche Objektcursor betrachten bis zu 32 Positionen voraus. Bereiche mit bis zu 4 KiB Zwischenraum werden bis 1 MiB zusammengefasst; grössere Frames werden beim Zugriff einzeln geladen. Nur vollständig geprüfte Frames gelangen in den gemeinsamen, standardmässig 32 MiB grossen Cache. Die temporäre zusammengefasste Antwort ist auf 1 MiB begrenzt. `RemoteOptions.prefetchPositions=0` deaktiviert das Vorladen.
 
 `info --storage` zählt physische Bytes je Abschnittstyp sowie Schlüssel- und Wertfelder nach Eintragstyp. Gemeinsame Seitenkosten (Frameheader und Eintragsanzahl) und Überlauf-Frames werden separat ausgewiesen. Lesemetriken unterscheiden logische Framezugriffe, HTTP-Anfragen, zusätzliche Zwischenraumbytes, geladene Metadaten/Indexseiten/Chunks und maximale Cachebelegung.
+
+## IBX 4: Navigation und Katalog
+
+Die Header-Magic lautet ASCII `IBXCONT1`, Footer-Magic `IBXFOOT1`, Version 4.
+IliContainer-Magic wird mit Neuerstellungshinweis abgelehnt, unabhängig von der
+Extension. Frame- und Footergrössen bleiben unverändert.
+
+Metadaten ergänzen `datasetId` (neue UUID pro Erstellung), `navigationVersion=1`,
+`reverseIndex` und `definitions`. Definitionen werden nach qualifizierten Namen
+adressiert und enthalten Labels, Beschreibung, Titelattribut, Vererbung, Typ,
+Kardinalität, Ordnung, Zielklasse, Assoziation, Einbettung, Einheiten und Aufzählungen.
+Die IOX-Abbildung bleibt separat `mappingVersion=1`.
+
+Zusätzliche Schlüsselbereiche im bestehenden B+-Baum:
+
+| Präfix | Schlüsselkomponenten | Wert |
+|---|---|---|
+| Q | Klasse (Text), BID (Text) | CBOR-Katalogeintrag: className, bid, count, geometries |
+| R | Ziel-FID (Position), Quell-FID (Position), Instanzpfad (Text) | CBOR-Referenz: sourceFid, path, targetTid, targetBid, order |
+
+Text und Position verwenden dieselben Marker, Null-Escapes und i64-Kodierungen
+wie die bestehenden Schlüssel. Das Katalogfeld `geometries` ordnet direkten
+Attributnamen eine konservative `extent` und eine Liste tatsächlich vorkommender
+ISO-WKB-`types` zu. Die Objektzahl gehört zur Klasse/Basket-Gruppe und zählt auch
+Objekte ohne Geometriewert. Leere Baskets bleiben über P/B sichtbar.
+
+Der Writer erfasst Referenzen rekursiv und löst sie nach endgültiger FID-Vergabe
+über eine externe Sortierung mit TID-Zieladressen auf. Explizite BID-Abweichungen
+werden nicht als lokale Kante indexiert. Fehlende Ziele bleiben in den
+Originalreferenzen erhalten. OID-lose Assoziationen werden über Quell-FID und
+Instanzpfad identifiziert. Instanzpfade wechseln Attributname und nullbasierte
+Wertposition. `reverseIndex=false` bedeutet fehlende Indizierung, nicht leere
+Beziehungen. Die Katalogerstellung ist unabhängig vom Rückwärtsindex.
+
+Bereichsfortsetzungen suchen direkt ab dem letzten binären Schlüssel und prüfen
+die Zugehörigkeit zum ursprünglichen Präfix. Es gibt keinen Offset-basierten
+Neuscan. Keine dieser Erweiterungen verändert die Originalobjekte oder erzwingt
+Referenznachladung beim XTF-Export. Es gibt keine separaten Indexdateien.
+
+Die neue Dataset-UUID bedeutet, dass unabhängig neu erstellte Container nicht
+byteidentisch sein müssen. Generatoren und erwartete fachliche Daten bleiben
+reproduzierbar; Zugriffscaches werden nie allein nach FID oder TID geteilt.

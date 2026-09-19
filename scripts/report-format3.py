@@ -16,9 +16,9 @@ def physical_storage(path):
     shared = 0
     with path.open('rb') as f:
         magic, version, features = struct.unpack('>8sii', f.read(16))
-        if magic != b'ILICONT1' or version not in (1, 2, 3) or features:
+        if not ((magic == b'ILICONT1' and version in (1, 2, 3)) or (magic == b'IBXCONT1' and version == 4)) or features:
             raise ValueError('Unknown accounting layout')
-        footer = 64 if version == 3 else 40
+        footer = 64 if version >= 3 else 40
         end = path.stat().st_size - footer
         while f.tell() < end:
             offset = f.tell()
@@ -39,12 +39,12 @@ def physical_storage(path):
             shared += 20
             previous = b''
             for _ in range(count):
-                prefix = integer() if version == 3 else 0
+                prefix = integer() if version >= 3 else 0
                 n = integer()
-                key_cost = 8 if version == 3 else 4
+                key_cost = 8 if version >= 3 else 4
                 if n == -1:
                     overflow, = struct.unpack_from('>q', payload, pos)
-                    ref_size = 16 if version == 3 else 8
+                    ref_size = 16 if version >= 3 else 8
                     pos += ref_size; key_cost += ref_size
                     saved = f.tell(); f.seek(overflow)
                     typ, size, checksum = struct.unpack('>iqI', f.read(16))
@@ -58,7 +58,7 @@ def physical_storage(path):
                 keys[category] += key_cost
                 previous = key
                 n = integer()
-                size = (16 if version == 3 else 8) if n == -1 else n
+                size = (16 if version >= 3 else 8) if n == -1 else n
                 if size < 0 or pos + size > len(payload): raise ValueError('Bad value length')
                 pos += size; values[category] += 4 + size
             if pos != len(payload): raise ValueError('Trailing page bytes')
@@ -116,7 +116,7 @@ for path in sorted(a.input.glob('*/*/results.json')):
             actual = {(r['delayMillis'], r['repeat'], r['cache']) for r in samples}
             if actual != expected or len(samples) != len(expected):
                 raise ValueError(f'Incomplete repetitions: {path}/{query}')
-    data['physicalStorage'] = physical_storage(path.parent / 'data.ilic')
+    data['physicalStorage'] = physical_storage(path.parent / 'data.ibx')
     reports.append(data)
     create = next(r for r in rows if r['operation'] == 'create')
     digest = create['inputSha256']

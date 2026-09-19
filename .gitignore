@@ -1,6 +1,10 @@
 .gradle/
 build/
 benchmark-data/
-*.ilic
-!src/test/resources/format3/*.ilic
+*.ibx
+!src/test/resources/format4/*.ibx
 .DS_Store
+
+!demo/*.ibx
+__pycache__/
+*.pyc

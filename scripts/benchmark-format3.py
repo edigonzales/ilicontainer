@@ -36,8 +36,8 @@ def synthetic(path):
 
 
 def worker_jar(library, target):
-    prefixes = ('ch/interlis/ilicontainer/benchmark/OptimizationBenchmark',
-                'ch/interlis/ilicontainer/benchmark/RangeServer')
+    prefixes = ('ch/interlis/ibx/benchmark/OptimizationBenchmark',
+                'ch/interlis/ibx/benchmark/RangeServer')
     with zipfile.ZipFile(library) as src:
         entries = {name: src.read(name) for name in src.namelist()
                    if name.startswith(prefixes) and name.endswith('.class')}
@@ -68,14 +68,14 @@ def main():
     for name, sha in ref_manifest['files'].items():
         if digest(ref_dist / name) != sha: raise RuntimeError(f'Reference changed: {name}')
     dist = a.output / 'distribution'
-    if not dist.exists(): shutil.copytree(ROOT / 'build/install/ilicontainer', dist)
+    if not dist.exists(): shutil.copytree(ROOT / 'build/install/ibx', dist)
     libraries = {str(f.relative_to(dist)): digest(f) for f in sorted((dist / 'lib').glob('*.jar'))}
     if (a.output / 'build.json').exists():
         saved = json.loads((a.output / 'build.json').read_text())
         if saved['libraries'] != libraries: raise RuntimeError('Saved distribution changed; use a fresh output directory')
     (a.output / 'build.json').write_text(json.dumps({'libraries': libraries, 'reference': ref_manifest}, indent=2))
     worker = a.output / 'worker.jar'
-    worker_jar(next((dist / 'lib').glob('ilicontainer-*.jar')), worker)
+    worker_jar(next((dist / 'lib').glob('ibx-*.jar')), worker)
     java = str(Path(os.environ.get('JAVA_HOME', '/Users/stefan/.sdkman/candidates/java/21.0.7-tem')) / 'bin/java')
     variants = [('reference', True, False, 'x', False, 262144),
                 ('x-direct', False, False, 'x', False, 262144),
@@ -110,12 +110,12 @@ def main():
                 selected_worker = worker
                 if dataset == 'million':
                     selected_worker = a.output / 'directory-worker.jar'
-                    worker_jar(next((ROOT / 'build/install/ilicontainer/lib').glob('ilicontainer-*.jar')), selected_worker)
+                    worker_jar(next((ROOT / 'build/install/ibx/lib').glob('ibx-*.jar')), selected_worker)
                 cp = str(selected_worker) + os.pathsep + str((ref_dist if reference else dist) / 'lib/*')
                 print(f'{dataset} {output.name}', flush=True)
                 with (output / 'worker.log').open('w') as log:
                     subprocess.run([java, '-Xmx384m', '-cp', cp,
-                                    'ch.interlis.ilicontainer.benchmark.OptimizationBenchmark', str(config_file)],
+                                    'ch.interlis.ibx.benchmark.OptimizationBenchmark', str(config_file)],
                                    cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
 
 if __name__ == '__main__': main()

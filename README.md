@@ -1,14 +1,27 @@
-# IliContainer
+# IBX — INTERLIS Binary eXchange
 
 Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren Containers für **INTERLIS 2.4 FULL**. Initial-/Update-Transfers und XTF 2.3 werden ausdrücklich abgelehnt.
 
-- [Architektur und Prototyp-Spezifikation v0.3](ilicontainer-architektur-prototyp-spezifikation-v0.3.md)
+- [Architektur und Prototyp-Spezifikation v0.3](ibx-architektur-prototyp-spezifikation-v0.3.md)
 - [Experimentelles Dateiformat und Implementierungsdetails](docs/FORMAT.md)
 - [Implementierung und Abnahmenachweise](docs/IMPLEMENTATION.md)
 - [Optionales WKB-Profil und direkte GIS-API](docs/WKB.md)
 - [Benchmarks und Reproduktion](docs/BENCHMARKS.md)
 
-**Kompatibilitätsbruch:** Reader und Writer unterstützen ausschliesslich Containerformat 3. Dateien der Formate 1 und 2 müssen aus den ursprünglichen XTF-Quellen neu erstellt werden.
+**Kompatibilitätsbruch:** Reader und Writer unterstützen ausschliesslich IBX-Containerformat 4. IliContainer-Dateien der Formate 1, 2 und 3 müssen aus den ursprünglichen XTF-Quellen neu erstellt werden.
+
+## QGIS-Prototyp
+
+Der lesende Python-Provider für QGIS 4.2.2 öffnet lokale und öffentliche HTTPS-Dateien.
+Der Objektbrowser zeigt eingebettete Strukturen und navigiert in beide Beziehungsrichtungen.
+[Installation und Demo](docs/QGIS.md) · [Bridge-Protokoll](protocol/README.md) · [Testdaten](demo/README.md).
+
+```sh
+./scripts/build-demo.sh
+python3 scripts/package-qgis.py
+```
+
+Das Paket liegt unter `build/ibx-qgis-0.4.0.zip`; Java 21 ist erforderlich.
 
 ## Build und Tests
 
@@ -16,7 +29,7 @@ Java 21 ist für Build und Ausführung erforderlich. Der Quellcode wird mit `--r
 
 ```sh
 ./gradlew test build installDist
-build/install/ilicontainer/bin/ilicontainer --help
+build/install/ibx/bin/ibx --help
 ```
 
 `test` verwendet kleine lokale Modelle, einen Loopback-HTTP-Server und einen separaten Prozess mit 32 MiB Heap. Es lädt keine Benchmark-Datensätze herunter. Die Bibliotheken werden beim ersten Gradle-Build aufgelöst. CI ist für Linux und macOS mit Java 21 konfiguriert.
@@ -24,13 +37,13 @@ build/install/ilicontainer/bin/ilicontainer --help
 ## Container erstellen und exportieren
 
 ```sh
-ilicontainer create data.xtf data.ilic \
+ibx create data.xtf data.ibx \
   --model-dir ./models \
   --model-dir https://models.geo.admin.ch \
   --model-dir https://models.interlis.ch
 
-ilicontainer info data.ilic
-ilicontainer export data.ilic roundtrip.xtf
+ibx info data.ibx
+ibx export data.ibx roundtrip.xtf
 ```
 
 Alternativ kann eine ILI-Datei über `--model-file ./models/MyModel.ili` angegeben werden. `--model-dir` und `--model-file` sind wiederholbar. Modelle werden beim Erstellen aufgelöst; Lesen und Export benötigen anschliessend keinen Modellserver und keine lokalen ILI-Dateien.
@@ -57,21 +70,21 @@ Es findet keine obligatorische vollständige Modellvalidierung statt. Unlesbare 
 ## Selektiver Zugriff
 
 ```sh
-ilicontainer get-topic data.ilic Model.Topic --output topic.xtf
-ilicontainer get-basket data.ilic b123 --output basket.xtf
-ilicontainer get-class data.ilic Model.Topic.Class --output class.xtf
-ilicontainer get-object data.ilic o4711 --output object.xtf
+ibx get-topic data.ibx Model.Topic --output topic.xtf
+ibx get-basket data.ibx b123 --output basket.xtf
+ibx get-class data.ibx Model.Topic.Class --output class.xtf
+ibx get-object data.ibx o4711 --output object.xtf
 ```
 
-Ohne `--output` wird XTF nach stdout geschrieben. Diagnosen gehen nach stderr. Selektive Ausgaben sind **Fragmente**: Der Headerkommentar enthält `IliContainer fragment`, Auswahlart und Unvollständigkeitshinweis. Bestehende Kommentare, Basketkontexte und Referenzen bleiben erhalten. Fragmente sind möglicherweise nicht modellkonform; referenzierte Objekte werden nicht nachgeladen.
+Ohne `--output` wird XTF nach stdout geschrieben. Diagnosen gehen nach stderr. Selektive Ausgaben sind **Fragmente**: Der Headerkommentar enthält `IBX fragment`, Auswahlart und Unvollständigkeitshinweis. Bestehende Kommentare, Basketkontexte und Referenzen bleiben erhalten. Fragmente sind möglicherweise nicht modellkonform; referenzierte Objekte werden nicht nachgeladen.
 
 Klassenabfragen betreffen die konkrete Klasse. Unbekannte TIDs/BIDs ergeben leere Fragmente; unbekannte Klassen/Topics führen zu einer Diagnose.
 
 ## Räumliche Kandidaten
 
 ```sh
-ilicontainer add-spatial-index data.ilic Model.Topic.Class Geometrie --crs EPSG:2056
-ilicontainer bbox-candidates data.ilic Model.Topic.Class Geometrie \
+ibx add-spatial-index data.ibx Model.Topic.Class Geometrie --crs EPSG:2056
+ibx bbox-candidates data.ibx Model.Topic.Class Geometrie \
   2600000 1200000 2601000 1201000 --output candidates.xtf
 ```
 
@@ -80,12 +93,12 @@ Gesucht wird zweidimensional im CRS des Index. Randberührungen zählen; Z-Werte
 ## Datenanordnung und Diagnose
 
 ```sh
-ilicontainer create data.xtf spatial.ilic --model-dir ./models \
+ibx create data.xtf spatial.ibx --model-dir ./models \
   --geometry-encoding wkb \
   --geometry-crs Model.Topic.Class.Geometrie=EPSG:2056 \
   --spatial-order Model.Topic.Class.Geometrie \
   --spatial Model.Topic.Class:Geometrie --crs EPSG:2056
-ilicontainer info spatial.ilic --storage
+ibx info spatial.ibx --storage
 ```
 
 `--spatial-order` ist je Klasse einmal und für mehrere Klassen wiederholbar. Es sortiert Hauptobjekte innerhalb derselben Basket-/Klassen-Gruppe; Basket-, LIST- und Beziehungsreihenfolgen bleiben erhalten. FIDs entstehen nach der Sortierung und sind innerhalb einer Datei stabil. Beim Neuerstellen mit anderer Anordnung können sie sich ändern; TIDs bleiben erhalten. Objekte ohne Geometrie stehen am Gruppenende.
@@ -95,7 +108,7 @@ Die STR-Packung des Index und die Hilbert-Anordnung der Daten sind unabhängig: 
 ## HTTP Range Access
 
 ```sh
-ilicontainer get-object https://example.org/data.ilic o4711 --output object.xtf
+ibx get-object https://example.org/data.ibx o4711 --output object.xtf
 ```
 
 Standardmässig sind gültige Range-Antworten und ein starker ETag erforderlich. Bei tatsächlich unveränderlichen URLs kann `--immutable-url` verwendet werden. `--allow-full-download` erlaubt beim Öffnen ausdrücklich eine vollständige lokale Momentaufnahme, falls der Server keine Ranges unterstützt. Wechselnde Dateistände werden niemals zu einem erfolgreichen Ergebnis vermischt.
@@ -103,7 +116,7 @@ Standardmässig sind gültige Range-Antworten und ein starker ETag erforderlich.
 ## Java-API
 
 ```java
-try (IliContainer container = IliContainer.open(Paths.get("data.ilic"));
+try (IbxContainer container = IbxContainer.open(Paths.get("data.ibx"));
      Fragment fragment = container.getBasket("b123");
      Stream<SelectedObject> objects = fragment.objects()) {
     objects.forEach(selected -> {
@@ -113,14 +126,14 @@ try (IliContainer container = IliContainer.open(Paths.get("data.ilic"));
 }
 ```
 
-`fragment.baskets()` liefert auch selektierte leere Baskets. Die Basket- und Objektansichten können unabhängig gelesen werden. Vollständiges Lesen erfolgt mit `container.openTransferReader()` oder direkt sequenziell mit `IliContainer.stream(inputStream)` als IOX-Eventfolge. Der Reader übernimmt den ihm übergebenen Eingabestream und muss geschlossen werden.
+`fragment.baskets()` liefert auch selektierte leere Baskets. Die Basket- und Objektansichten können unabhängig gelesen werden. Vollständiges Lesen erfolgt mit `container.openTransferReader()` oder direkt sequenziell mit `IbxContainer.stream(inputStream)` als IOX-Eventfolge. Der Reader übernimmt den ihm übergebenen Eingabestream und muss geschlossen werden.
 
 Für Vergleichsmessungen kann das räumliche Vorladen über die Java-API deaktiviert werden:
 
 ```java
 RemoteOptions options = new RemoteOptions();
 options.prefetchPositions = 0;
-try (IliContainer container = IliContainer.open(uri, options)) {
+try (IbxContainer container = IbxContainer.open(uri, options)) {
     // Abfragen verwenden weiterhin denselben begrenzten Framecache.
 }
 ```

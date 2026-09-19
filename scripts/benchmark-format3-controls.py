@@ -29,7 +29,7 @@ def main():
     for name, digest in json.loads((base / 'build.json').read_text())['libraries'].items():
         if bench.digest(distribution / name) != digest: raise RuntimeError(f'Format-3 library changed: {name}')
     worker = base / 'controls-worker.jar'
-    bench.worker_jar(next((ROOT / 'build/install/ilicontainer/lib').glob('ilicontainer-*.jar')), worker)
+    bench.worker_jar(next((ROOT / 'build/install/ibx/lib').glob('ibx-*.jar')), worker)
     java = str(Path(os.environ.get('JAVA_HOME', '/Users/stefan/.sdkman/candidates/java/21.0.7-tem')) / 'bin/java')
     for source in sorted(base.glob('*/*/config.json')):
         case = source.parent
@@ -49,10 +49,10 @@ def main():
             print(f'controls {case.relative_to(base)} repeat {repeat + 1}', flush=True)
             with (output / 'worker.log').open('w') as log:
                 subprocess.run([java, '-Xmx384m', '-cp', str(worker) + os.pathsep + str(libraries / 'lib/*'),
-                                'ch.interlis.ilicontainer.benchmark.OptimizationBenchmark', str(config_file)],
+                                'ch.interlis.ibx.benchmark.OptimizationBenchmark', str(config_file)],
                                cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
             # The extra observation is a measurement artifact, not another benchmark input.
-            (output / 'data.ilic').unlink()
+            (output / 'data.ibx').unlink()
         if args.report:
             subprocess.run(['python3', str(ROOT / 'scripts/report-format3.py'), str(base), str(args.report)], check=True)
 

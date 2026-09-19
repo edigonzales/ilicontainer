@@ -3,18 +3,19 @@
 Das optionale Profil ersetzt IOM-Geometriebäume durch ISO-WKB. Es speichert keine
 zweite Geometriekopie. Attribute, Referenzen, Strukturen, Identitäten und
 Basketkontexte bleiben im Objekt enthalten. Standard ist weiterhin `iom`.
-Ein QGIS-/GDAL-Dateitreiber ist noch nicht enthalten. Die GIS-API stellt bereits
-Layerbeschreibungen, skalare Attribute und WKB für einen solchen Reader bereit.
+Der [QGIS-Python-Provider](QGIS.md) verwendet dieses Profil. Ein GDAL-Dateitreiber
+ist noch nicht enthalten. Die direkte Java-GIS-API stellt skalare Attribute und WKB bereit;
+vollständige Strukturen und Navigation liefert zusätzlich die Navigation-API.
 
 ## Erstellen und exportieren
 
 ```sh
-ilicontainer create input.xtf output.ilic --model-dir ./models \
+ibx create input.xtf output.ibx --model-dir ./models \
   --geometry-encoding wkb \
   --geometry-crs MyModel.Topic.Class.Geometry=EPSG:2056
-ilicontainer info output.ilic
-ilicontainer export output.ilic roundtrip.xtf
-ilicontainer add-spatial-index output.ilic MyModel.Topic.Class Geometry
+ibx info output.ibx
+ibx export output.ibx roundtrip.xtf
+ibx add-spatial-index output.ibx MyModel.Topic.Class Geometry
 ```
 
 `--geometry-crs` ist wiederholbar. Bekannte Modell-CRS werden übernommen;
@@ -24,7 +25,7 @@ Basket und expliziter Zuordnung führen zum Abbruch. Eine explizite Zuordnung is
 eine Aussage des Aufrufers über vorhandene Koordinaten, keine Transformation.
 
 IOM- und WKB-Dateien verwenden ausschliesslich Containerformat 3. Alte Dateien
-der Formate 1 und 2 müssen aus ihren XTF-Quellen neu erstellt werden. Ein WKB-Erstellungsfehler veröffentlicht keine
+der IliContainer-Formate 1, 2 und 3 müssen aus ihren XTF-Quellen neu erstellt werden. Ein WKB-Erstellungsfehler veröffentlicht keine
 Zieldatei und überschreibt keine vorhandene Datei. Ein späterer Fehler beim
 optionalen Indexaufbau lässt den vollständigen Core-Container bestehen.
 
@@ -66,7 +67,7 @@ Richtung und Kontrollpunkte bleiben erhalten. Zahlenformatierungen dürfen sich
 ## Direkter GIS-Zugriff
 
 ```java
-try (IliContainer container = IliContainer.open(Paths.get("output.ilic"));
+try (IbxContainer container = IbxContainer.open(Paths.get("output.ibx"));
      GisLayer layer = container.openLayer("MyModel.Topic.Class.Geometry");
      Stream<GisFeature> features = layer.features()) {
   features.forEach(feature -> {

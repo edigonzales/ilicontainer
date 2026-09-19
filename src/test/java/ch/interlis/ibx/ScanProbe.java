@@ -1,0 +1,32 @@
+package ch.interlis.ibx;
+
+import ch.interlis.ibx.api.IbxContainer;
+import ch.interlis.iox.*;
+import java.nio.file.*;
+
+public final class ScanProbe {
+  public static void main(String[] args) throws Exception {
+    if (args.length >= 3) {
+      ch.interlis.ibx.api.WriterOptions w =
+          new ch.interlis.ibx.api.WriterOptions();
+      w.modelFiles.add(args[2]);
+      if (args.length == 4) w.geometryEncoding = args[3];
+      w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
+      w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
+      w.spatialOrder.put("Tiny.Data.Item", "point");
+      w.sortMemoryBytes = 1024 * 1024;
+      ch.interlis.ibx.container.ContainerWriter.create(
+          Paths.get(args[0]), Paths.get(args[1]), w);
+      return;
+    }
+    IoxReader reader = IbxContainer.stream(Files.newInputStream(Paths.get(args[0])));
+    long n = 0;
+    try {
+      IoxEvent e;
+      while ((e = reader.read()) != null) if (e instanceof ObjectEvent) n++;
+    } finally {
+      reader.close();
+    }
+    System.out.println(n);
+  }
+}

@@ -3,8 +3,8 @@ plugins {
     id 'application'
 }
 
-group = 'ch.interlis.ilicontainer'
-version = '0.3.0-prototype'
+group = 'ch.interlis.ibx'
+version = '0.4.0-prototype'
 
 repositories {
     mavenCentral()
@@ -32,7 +32,7 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 dependencyLocking { lockAllConfigurations() }
-application { mainClass = 'ch.interlis.ilicontainer.cli.Main' }
+application { mainClass = 'ch.interlis.ibx.cli.Main' }
 test { testLogging { events 'failed'; exceptionFormat = 'full' } }
 tasks.register('runtimePaths') {
     doLast { println configurations.runtimeClasspath.asPath }
@@ -42,7 +42,7 @@ tasks.register('prepareData', JavaExec) {
     group = 'benchmark'
     description = 'Explicit download: -Pdataset=dmav|localities|addresses -PdataDir=...'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'ch.interlis.ilicontainer.benchmark.PrepareData'
+    mainClass = 'ch.interlis.ibx.benchmark.PrepareData'
     args providers.gradleProperty('dataset').getOrElse('dmav'), providers.gradleProperty('dataDir').getOrElse('benchmark-data/dmav'), providers.gradleProperty('community').getOrElse('2541')
 }
 
@@ -50,15 +50,22 @@ tasks.register('benchmark', JavaExec) {
     group = 'benchmark'
     description = 'Explicit benchmark; pass command arguments with --args.'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'ch.interlis.ilicontainer.benchmark.BenchmarkMain'
+    mainClass = 'ch.interlis.ibx.benchmark.BenchmarkMain'
     maxHeapSize = '384m'
 }
 
 test {
-    systemProperty 'ilic.test.classpath', sourceSets.test.runtimeClasspath.asPath
+    systemProperty 'ibx.test.classpath', sourceSets.test.runtimeClasspath.asPath
 }
 
 // Preserve source attribution in all delivered library artifacts.
 tasks.withType(Jar).configureEach {
     from('THIRD_PARTY.md') { into 'META-INF' }
+}
+
+// The plugin launches this main class using the same pinned runtime distribution.
+tasks.register('bridge', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ch.interlis.ibx.bridge.BridgeMain'
+    standardInput = System.in
 }
