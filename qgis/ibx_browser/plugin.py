@@ -44,7 +44,7 @@ class Identify(QgsMapToolIdentify):
         if self.task:
             self.task.cancel()
         canvas = self.iface.mapCanvas()
-        point = canvas.getCoordinateTransform().toMapCoordinates(event.x(), event.y())
+        point = event.mapPoint()
         radius = canvas.mapUnitsPerPixel() * 5
         box = QgsRectangle(
             point.x() - radius,

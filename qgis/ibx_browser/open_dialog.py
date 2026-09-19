@@ -1,5 +1,6 @@
 from pathlib import Path
-from qgis.PyQt.QtCore import Qt
+from enum import IntEnum
+from qgis.PyQt.QtCore import Qt, QSettings
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -12,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QTreeWidgetItem,
     QDialogButtonBox,
     QListWidget,
-    QListWidgetItem,
+    QHeaderView,
     QAbstractItemView,
     QCheckBox,
 )
@@ -21,12 +22,47 @@ from .client import manager
 from .tasks import submit
 
 
+class Column(IntEnum):
+    NAME = 0
+    KIND = 1
+    GEOMETRY = 2
+    COUNT = 3
+    MODEL = 4
+
+
+COUNT_CLASS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+MODEL_NAMES_SETTING = "ibx/showModelNames"
+
+
+def geometry_label(geometry, types):
+    if geometry is None:
+        return "Ohne Geometrie"
+    families = set()
+    for value in types:
+        base = value % 1000
+        if base in (1, 4):
+            families.add("Punkt")
+        elif base in (2, 5, 8, 9, 11, 13):
+            families.add("Linie")
+        elif base in (3, 6, 10, 12, 14, 15, 16, 17):
+            families.add("Fläche")
+        elif base == 7:
+            return "Gemischt"
+        else:
+            families.add("Geometrie")
+    return (
+        next(iter(families))
+        if len(families) == 1
+        else "Gemischt" if families else "Geometrie"
+    )
+
+
 class OpenDialog(QDialog):
     def __init__(self, iface, layers):
         super().__init__(iface.mainWindow())
         self.iface, self.layers = iface, layers
         self.setWindowTitle("IBX öffnen")
-        self.resize(820, 620)
+        self.resize(1000, 680)
         self.dataset = None
         self.task = None
         layout = QVBoxLayout(self)
@@ -58,17 +94,30 @@ class OpenDialog(QDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Objektart suchen …")
+        self.search.setPlaceholderText("Name oder Modellname suchen …")
         self.search.textChanged.connect(self.filter)
         layout.addWidget(self.search)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Objektart / Geometrie", "Typ", "Objekte"])
-        self.tree.setColumnWidth(0, 420)
+        self.tree.setHeaderLabels(
+            ["Name", "Modellart", "Geometrie", "Anzahl", "Modellname"]
+        )
+        self.tree.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.tree.header().setStretchLastSection(False)
+        for column, width in zip(Column, [310, 130, 180, 90, 350]):
+            self.tree.setColumnWidth(column, width)
+        self.model_names = QCheckBox("Modellnamen anzeigen")
+        self.model_names.setChecked(
+            QSettings().value(MODEL_NAMES_SETTING, False, type=bool)
+        )
+        self.tree.setColumnHidden(Column.MODEL, not self.model_names.isChecked())
+        self.model_names.toggled.connect(self.toggle_model_names)
+        layout.addWidget(self.model_names)
         layout.addWidget(self.tree, 1)
-        layout.addWidget(QLabel("Datenbereiche · keine Auswahl bedeutet alle"))
+        layout.addWidget(QLabel("Baskets · keine Auswahl bedeutet alle"))
         self.baskets = QListWidget()
         self.baskets.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.baskets.setMaximumHeight(90)
+        self.baskets.itemSelectionChanged.connect(self.update_counts)
         layout.addWidget(self.baskets)
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         self.add = self.buttons.addButton(
@@ -137,7 +186,9 @@ class OpenDialog(QDialog):
             group_key = model + "." + topic
             parent = groups.get(group_key)
             if parent is None:
-                parent = QTreeWidgetItem(self.tree, [dataset.label(group_key), "", ""])
+                parent = self.make_item(
+                    self.tree, dataset.label(group_key), model_name=group_key
+                )
                 parent.setExpanded(True)
                 groups[group_key] = parent
             geometries = [
@@ -152,8 +203,18 @@ class OpenDialog(QDialog):
                 )
             )
             choices = geometries or [None]
+            definition = dataset.meta.get("definitions", {}).get(cls, {})
+            kind = {"class": "Klasse", "association": "Assoziation"}.get(
+                definition.get("kind"), "Unbekannt"
+            )
             if len(choices) > 1:
-                parent = QTreeWidgetItem(parent, [dataset.label(cls), "", ""])
+                parent = self.make_item(
+                    parent, dataset.label(cls), kind, "Mehrere Geometrien", cls, cls
+                )
+                parent.setToolTip(
+                    Column.GEOMETRY,
+                    "Diese Geometriesichten zeigen dieselben Objekte. Die Anzahlen dürfen nicht addiert werden.",
+                )
                 parent.setExpanded(True)
             for geometry in choices:
                 label = (
@@ -162,27 +223,28 @@ class OpenDialog(QDialog):
                     else dataset.label(cls)
                 )
                 count, _, types = dataset.layer(cls, geometry, [])
-                typename = (
-                    "Tabelle"
-                    if geometry is None
-                    else (
-                        "Punkt"
-                        if types and all(t % 1000 in (1, 4) for t in types)
-                        else (
-                            "Fläche"
-                            if types and all(t % 1000 in (3, 6, 10, 12) for t in types)
-                            else "Geometrie"
-                        )
-                    )
+                model_name = cls + "." + geometry if len(choices) > 1 else cls
+                item = self.make_item(
+                    parent,
+                    label,
+                    "" if len(choices) > 1 else kind,
+                    geometry_label(geometry, types),
+                    model_name,
+                    cls,
                 )
-                item = QTreeWidgetItem(parent, [label, typename, str(count)])
-                item.setData(0, Qt.ItemDataRole.UserRole, (cls, geometry))
+                item.setData(Column.NAME, Qt.ItemDataRole.UserRole, (cls, geometry))
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                item.setCheckState(0, Qt.CheckState.Unchecked)
+                item.setCheckState(Column.NAME, Qt.CheckState.Unchecked)
                 item.setToolTip(
                     0,
-                    dataset.meta.get("definitions", {}).get(cls, {}).get("description")
-                    or cls,
+                    label
+                    + "\n"
+                    + model_name
+                    + (
+                        "\n" + definition["description"]
+                        if definition.get("description")
+                        else ""
+                    ),
                 )
                 indexed = geometry is None or any(
                     i["className"] == cls and i["attribute"] == geometry
@@ -194,23 +256,67 @@ class OpenDialog(QDialog):
                         0, "Räumlicher Index fehlt. Mit ibx add-spatial-index ergänzen."
                     )
                 elif first and geometry:
-                    item.setCheckState(0, Qt.CheckState.Checked)
+                    item.setCheckState(Column.NAME, Qt.CheckState.Checked)
                     first = False
         self.status.setText(
             "Objektarten auswählen. Beziehungen lassen sich später auch ohne geladene Ziellayer öffnen."
         )
+        self.update_counts()
         self.add.setEnabled(True)
         self.filter(self.search.text())
 
-    def filter(self, text):
+    def toggle_model_names(self, visible):
+        self.tree.setColumnHidden(Column.MODEL, not visible)
+        QSettings().setValue(MODEL_NAMES_SETTING, visible)
+
+    def make_item(
+        self, parent, name, kind="", geometry="", model_name="", count_class=None
+    ):
+        item = QTreeWidgetItem(parent, [name, kind, geometry, "", model_name])
+        for column in Column:
+            item.setToolTip(column, item.text(column))
+        item.setData(Column.NAME, COUNT_CLASS_ROLE, count_class)
+        item.setTextAlignment(
+            Column.COUNT, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        return item
+
+    def update_counts(self):
+        if self.dataset is None:
+            return
+        bids = {item.text() for item in self.baskets.selectedItems()}
+        counts = {}
+        for row in self.dataset.catalog:
+            if not bids or row["bid"] in bids:
+                cls = row["className"]
+                counts[cls] = counts.get(cls, 0) + row["count"]
+
         def visit(item):
-            own = text.casefold() in item.text(0).casefold()
-            children = [visit(item.child(i)) for i in range(item.childCount())]
+            cls = item.data(Column.NAME, COUNT_CLASS_ROLE)
+            if cls:
+                item.setText(Column.COUNT, str(counts.get(cls, 0)))
+                item.setToolTip(
+                    Column.COUNT,
+                    "Gespeicherte Instanzen in den ausgewählten Baskets; keine Auswahl bedeutet alle.",
+                )
+            for i in range(item.childCount()):
+                visit(item.child(i))
+
+        for i in range(self.tree.topLevelItemCount()):
+            visit(self.tree.topLevelItem(i))
+
+    def filter(self, text):
+        needle = text.casefold().strip()
+
+        def visit(item, inherited=False):
+            own = inherited or any(
+                needle in item.text(c).casefold() for c in (Column.NAME, Column.MODEL)
+            )
+            children = [visit(item.child(i), own) for i in range(item.childCount())]
             visible = own or any(children)
             item.setHidden(not visible)
-            if own:
-                for i in range(item.childCount()):
-                    item.child(i).setHidden(False)
+            if visible and needle and item.childCount():
+                item.setExpanded(True)
             return visible
 
         for i in range(self.tree.topLevelItemCount()):
@@ -221,8 +327,8 @@ class OpenDialog(QDialog):
         added = []
 
         def visit(item):
-            spec = item.data(0, Qt.ItemDataRole.UserRole)
-            if spec and item.checkState(0) == Qt.CheckState.Checked:
+            spec = item.data(Column.NAME, Qt.ItemDataRole.UserRole)
+            if spec and item.checkState(Column.NAME) == Qt.CheckState.Checked:
                 added.append(self.layers.ensure(self.dataset, *spec, bids))
             for i in range(item.childCount()):
                 visit(item.child(i))

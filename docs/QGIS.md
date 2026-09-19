@@ -23,6 +23,14 @@ z.B. `/Users/name/.sdkman/candidates/java/21.0.10-tem/bin/java`.
 Das Bridge-Verzeichnis bleibt beim ZIP-Paket leer (automatische Erkennung).
 
 **IBX → Demo öffnen** oder **IBX öffnen …** → `demo/quartier.ibx` wählen → **Gebäude / Grundriss** hinzufügen.
+Die Auswahl trennt **Name**, **Modellart** (Klasse oder Assoziation),
+**Geometrie** und **Anzahl**. **Modellnamen anzeigen** blendet die qualifizierten
+Originalnamen ein; die Wahl wird im QGIS-Profil gespeichert. Die Suche findet
+auch ausgeblendete Modellnamen. Die Anzahl folgt der Basket-Auswahl und zählt
+Instanzen; mehrere Geometriesichten derselben Klasse sind nicht zu addieren.
+Assoziationen lassen sich als eigene Tabellen öffnen, sofern sie als eigene
+Instanzen im Katalog enthalten sind.
+
 Mit **IBX-Objekt erkunden** ein Gebäude anklicken. Im Objektfenster:
 
 1. Kontrollen und Messungen aufklappen.
@@ -32,6 +40,14 @@ Mit **IBX-Objekt erkunden** ein Gebäude anklicken. Im Objektfenster:
 5. Mit „Zurück“ zum Auftrag und Gebäude zurückkehren.
 6. „Originalobjekte exportieren“ exportiert das aktuelle Objekt und markierte
    Objekte derselben Quelle, dedupliziert über ihre FID, als XTF-Fragment.
+
+Der **Besuchsverlauf** zeigt die Reihenfolge geöffneter Objekte, keine Hierarchie.
+Nummerierte Links öffnen frühere Besuche; das aktuelle Objekt ist fett markiert.
+Wiederholte Besuche bleiben sichtbar. Ältere Einträge lassen sich einblenden;
+spätere Besuche bleiben über „Vorwärts“ erreichbar. Ein neuer Beziehungsklick
+nach „Zurück“ beginnt einen neuen Verlauf ab dieser Stelle. Fehler und Abbruch
+verändern die aktuelle Position nicht. **Baskets** filtern die Layerauswahl;
+keine Auswahl bedeutet alle Baskets.
 
 „Attributtabelle“ bietet zusätzlich eine normale QGIS-Tabelle der Klasse.
 Bestehende Layerfilter werden beim Navigieren nicht verändert. Hervorhebungen
@@ -74,7 +90,11 @@ Optionale INTERLIS-Metadaten vor einer Klasse oder einem Attribut:
 !!@ ibx.titleAttribute = "Name"
 ```
 
-`ibx.titleAttribute` bezeichnet ein skalares Attribut der Klasse. Dokumentation,
+`ibx.label` benennt das Modellelement in der Oberfläche, beispielsweise die
+Klasse „Gebäude“. `ibx.titleAttribute` bezeichnet dagegen ein vorhandenes skalares
+Attribut der Klasse, dessen Wert den Titel eines einzelnen Objekts bildet,
+beispielsweise „Haus am Park 1“ im Objektbrowser und Besuchsverlauf.
+Es erzeugt kein neues Attribut und verändert keine Daten. Dokumentation,
 Kardinalitäten, Strukturtypen, Rollen, Vererbung, Einheiten und Aufzählungen werden
 beim Erstellen gespeichert. Zum Lesen wird kein Modellserver benötigt.
 

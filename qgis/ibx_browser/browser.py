@@ -1,4 +1,5 @@
 import json
+from html import escape
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -23,6 +24,7 @@ class ObjectBrowser(QDockWidget):
         self.dataset, self.obj = None, None
         self.history = []
         self.position = -1
+        self.show_full_history = False
         self.generation = 0
         self.task = None
         self.related_task = None
@@ -40,6 +42,13 @@ class ObjectBrowser(QDockWidget):
         layout.addLayout(nav)
         self.breadcrumb = QLabel("Datei öffnen und ein Objekt auf der Karte auswählen.")
         self.breadcrumb.setWordWrap(True)
+        self.breadcrumb.setTextFormat(Qt.TextFormat.RichText)
+        self.breadcrumb.setOpenExternalLinks(False)
+        self.breadcrumb.linkActivated.connect(self.history_link)
+        self.breadcrumb.setToolTip(
+            "Besuchsreihenfolge, keine Hierarchie. Beziehungen öffnen einen neuen Besuch; "
+            "Zurück/Vorwärts und die Links wechseln zu einem vorhandenen Besuch."
+        )
         layout.addWidget(self.breadcrumb)
         self.title = QLabel("Objekte und ihre Zusammenhänge")
         self.title.setStyleSheet("font-size:18px;font-weight:600;padding:8px 0")
@@ -91,7 +100,7 @@ class ObjectBrowser(QDockWidget):
                 task.cancel()
         self.status.setText("Abgebrochen. Das bisherige Objekt bleibt geöffnet.")
 
-    def open(self, dataset, fid=None, tid=None, bid=None, record_history=True):
+    def open(self, dataset, fid=None, tid=None, bid=None, history_position=None):
         self.abort()
         generation = self.generation
         self.status.setText("Objekt wird geladen …")
@@ -108,11 +117,13 @@ class ObjectBrowser(QDockWidget):
                 )
                 return
             self.dataset, self.obj = dataset, obj
-            if record_history:
+            if history_position is None:
                 self.history = self.history[: self.position + 1] + [
                     (dataset, obj["fid"], dataset.title(obj))
                 ]
                 self.position = len(self.history) - 1
+            else:
+                self.position = history_position
             self.render()
             self.load_related()
 
@@ -120,7 +131,7 @@ class ObjectBrowser(QDockWidget):
             "IBX-Objekt lesen",
             lambda rid: dataset.call("object", requestId=rid, **args),
             ready,
-            self.error,
+            lambda text: self.error(text) if generation == self.generation else None,
             dataset.rpc,
         )
 
@@ -131,12 +142,7 @@ class ObjectBrowser(QDockWidget):
         d, o = self.dataset, self.obj
         self.title.setText(d.title(o))
         self.status.setText("Nur lesend · Strukturen aufklappen, Beziehungen anklicken")
-        self.breadcrumb.setText(
-            " › ".join(
-                x[2]
-                for x in self.history[max(0, self.position - 3) : self.position + 1]
-            )
-        )
+        self.render_history()
         self.tree.clear()
         self.fields(self.tree, o)
         self.related = QTreeWidgetItem(
@@ -147,7 +153,7 @@ class ObjectBrowser(QDockWidget):
         for name, value in [
             ("Klasse", o["className"]),
             ("TID", o.get("tid")),
-            ("Datenbereich", o["bid"]),
+            ("Basket", o["bid"]),
             ("FID", o["fid"]),
             ("Dateistand", d.state),
         ]:
@@ -273,12 +279,49 @@ class ObjectBrowser(QDockWidget):
             d.rpc,
         )
 
+    def render_history(self):
+        start = 0 if self.show_full_history else max(0, self.position - 3)
+        visits = []
+        if start:
+            visits.append(f'<a href="earlier">… {start} frühere Besuche</a>')
+        elif self.show_full_history and self.position > 3:
+            visits.append('<a href="earlier">Frühere Besuche ausblenden</a>')
+        for i in range(start, self.position + 1):
+            dataset, _, title = self.history[i]
+            label = escape(title)
+            if i == self.position:
+                visits.append(f"<b>{i + 1}. {label} (aktuell)</b>")
+            else:
+                visits.append(
+                    f'<a href="visit:{i}" title="{escape(dataset.source, quote=True)}">'
+                    f"{i + 1}. {label}</a>"
+                )
+        forward = len(self.history) - self.position - 1
+        suffix = (
+            f"<br>{forward} spätere Besuche über „Vorwärts“ erreichbar."
+            if forward
+            else ""
+        )
+        self.breadcrumb.setText(
+            "<b>Besuchsverlauf</b> · Reihenfolge der geöffneten Objekte<br>"
+            + " → ".join(visits)
+            + suffix
+        )
+
+    def history_link(self, link):
+        if link == "earlier":
+            self.show_full_history = not self.show_full_history
+            self.render_history()
+        elif link.startswith("visit:") and link[6:].isdigit():
+            self.visit(int(link[6:]))
+
+    def visit(self, position):
+        if 0 <= position < len(self.history) and position != self.position:
+            dataset, fid, _ = self.history[position]
+            self.open(dataset, fid=fid, history_position=position)
+
     def travel(self, step):
-        pos = self.position + step
-        if 0 <= pos < len(self.history):
-            self.position = pos
-            d, fid, _ = self.history[pos]
-            self.open(d, fid=fid, record_history=False)
+        self.visit(self.position + step)
 
     def show_map(self):
         if self.obj:
