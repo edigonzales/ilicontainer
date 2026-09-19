@@ -27,15 +27,15 @@ Die messbaren Ergebnisse und Grenzen stehen in [BENCHMARKS.md](BENCHMARKS.md). D
 
 ## Bewusste Prototypgrenzen
 
-Keine exakte Intersects-Prüfung, CRS-Transformation, automatische Referenznachladung, vollständige obligatorische Modellvalidierung, räumliche Datenumsortierung, Schreibkonkurrenz oder dauerhafte Binärkompatibilitätszusage. Einzelne Frames sind durch Java-Arrays auf weniger als 2 GiB begrenzt; die Datei selbst verwendet 64-Bit-Offsets. Explizite Radiusbögen und numerisch mehrdeutige Bögen werden für die Indexierung mit Diagnose abgewiesen und bleiben im Core erhalten.
+Keine exakte Intersects-Prüfung, CRS-Transformation, automatische Referenznachladung, vollständige obligatorische Modellvalidierung, Schreibkonkurrenz oder dauerhafte Binärkompatibilitätszusage. Einzelne Frames sind durch Java-Arrays auf weniger als 2 GiB begrenzt; die Datei selbst verwendet 64-Bit-Offsets. Explizite Radiusbögen und numerisch mehrdeutige Bögen werden für die Indexierung mit Diagnose abgewiesen und bleiben im Core erhalten.
 
 Die Modellabbildung ist für Offline-Export vollständig; eingebettete ILI-Quellen sind zusätzlich optional. Der Offline-Prozesstest verwendet sowohl einen leeren als auch einen gefüllten Transfer, ein neues Arbeitsverzeichnis und nicht erreichbare HTTP-/HTTPS-Proxys.
 
 ## Optionale WKB-Erweiterung
 
-Das Profil `wkb-iso-v1` ergänzt Format 2, ISO-WKB mit echten Kreisbögen, einen
+Das Profil `wkb-iso-v1` bietet ISO-WKB mit echten Kreisbögen, einen
 seitenweisen FID-Index und die direkte `GisLayer`-/`GisFeature`-API.
-IOM bleibt Standard und verwendet weiterhin Format 1. Modell- und
+IOM bleibt Standard. Beide Kodierungen verwenden jetzt ausschliesslich Format 3. Modell- und
 Basketmetadaten ermöglichen weiterhin Offline-XTF-Export.
 
 Die Kurvenkodierung adaptiert die Vorarbeit aus dem Hop-Geometrieplugin ohne
@@ -44,7 +44,7 @@ Dezimalwerte und Kontrollpunkte werden vor Veröffentlichung durch einen
 semantischen Rückvergleich abgesichert. Eine vollständige Constraintvalidierung
 ist weiterhin nicht Teil der Erstellung.
 
-Der abschliessende Lauf umfasst 50 erfolgreiche Java-Tests.
+Der frühere WKB-Abnahmelauf umfasste 50 erfolgreiche Java-Tests; Format 3 ergänzt gezielte Prüfungen.
 Die vorhandenen Semantik-, Container-, Remote- und Spatial-Paging-Tests werden
 für beide Profile ausgeführt. Die GIS-API wird zusätzlich gegen unabhängige
 Gittererwartungen, FID-Einzelzugriffe, verschachtelte Geometrien und einen
@@ -54,3 +54,15 @@ Geometriefixtures und bestätigt deren Typen, Komponenten und ISO-WKB-Bytes.
 Bedienung und Profilgrenzen: [WKB.md](WKB.md).
 Messergebnisse: [WKB-Matrix](benchmarks/wkb/README.md).
 Ein QGIS-/GDAL-Dateitreiber und schreibender GIS-Zugriff sind spätere Erweiterungen.
+
+## Format 3
+
+- 64-Byte-Footer, vollständige FrameRefs, binäre und präfixkomprimierte Verzeichnisse, FID-Bereiche pro Chunk; kein Legacy-Reader.
+- STR als Standard, X-Packung als Vergleichsoption; Knotengrenzen anhand kodierter Bytes und externe Sortierung auf jeder Ebene.
+- Optionale Hilbert-Reihenfolge je Basket/Klasse, fehlende Geometrien zuletzt, FIDs nach Sortierung.
+- Bekannte Frames mit einer Range-Anfrage; räumliches Vorladen im gemeinsamen Cache, weiterhin strikte ETag-/CRC-Prüfung.
+- `Format3Test` prüft ein unabhängig spezifiziertes Binärfixture, alte Header, FID-Grenzen, Präzisions-/Bytegrenzen, HTTP-Zugriffszahlen und Mehrseitenabfragen gegen einen unabhängigen Punkt-Scan.
+- Der Wachstumstest schreibt jetzt auch mit Hilbert-Sortierung unter 64 MiB Heap und liest unter 32 MiB.
+- Die gesicherte Referenzdistribution und die Format-3-Distribution laufen für Vergleichsmessungen in getrennten Prozessen. Ergebnisse tragen den SHA-256 des tatsächlich geladenen Bibliotheks-JARs.
+
+Der lokale Format-3-Abnahmelauf besteht aus 60 erfolgreichen Java-Tests sowie der Linux-GDAL-Gegenprüfung aller 22 WKB-Fixtures. Die Vergleichsmatrix und ihr Abschlussstand stehen im [Format-3-Bericht](benchmarks/format3/README.md).

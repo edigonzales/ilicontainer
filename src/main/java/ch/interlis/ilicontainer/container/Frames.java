@@ -7,7 +7,7 @@ import java.util.zip.CRC32;
 
 public final class Frames {
   public static final long MAGIC = 0x494c49434f4e5431L, FOOTER_MAGIC = 0x494c4943464f4f31L;
-  public static final int VERSION = 1, HEADER_SIZE = 16, FRAME_HEADER = 16, FOOTER_SIZE = 40;
+  public static final int VERSION = 3, HEADER_SIZE = 16, FRAME_HEADER = 16, FOOTER_SIZE = 64;
   public static final int METADATA = 1,
       BASKET = 2,
       CHUNK = 3,
@@ -29,12 +29,8 @@ public final class Frames {
   }
 
   public static void header(DataOutput out) throws IOException {
-    header(out, VERSION);
-  }
-
-  public static void header(DataOutput out, int version) throws IOException {
     out.writeLong(MAGIC);
-    out.writeInt(version);
+    out.writeInt(VERSION);
     out.writeInt(0);
   }
 
@@ -42,7 +38,12 @@ public final class Frames {
     long magic = in.readLong();
     int version = in.readInt();
     int features = in.readInt();
-    if (magic != MAGIC || (version != 1 && version != 2) || features != 0)
+    if (magic == MAGIC && (version == 1 || version == 2))
+      throw new IOException(
+          "Containerformat "
+              + version
+              + " wird nicht mehr unterstützt; aus dem ursprünglichen XTF neu erstellen.");
+    if (magic != MAGIC || version != VERSION || features != 0)
       throw new IOException("Unsupported IliContainer header/version/features");
     return version;
   }
@@ -94,17 +95,36 @@ public final class Frames {
     return f;
   }
 
+  public static Frame read(RangeSource source, FrameRef ref) throws IOException {
+    ref.validate(source.size() - FOOTER_SIZE);
+    byte[] bytes = source.read(ref.offset, (int) ref.length);
+    return decode(bytes, ref);
+  }
+
+  public static Frame decode(byte[] bytes, FrameRef ref) throws IOException {
+    if (bytes.length < FRAME_HEADER
+        || ByteBuffer.wrap(bytes).getLong(4) != bytes.length - FRAME_HEADER)
+      throw new IOException("Invalid frame length");
+    if (bytes.length != ref.length) throw new IOException("Frame reference length mismatch");
+    Frame frame = read(new DataInputStream(new ByteArrayInputStream(bytes)));
+    if (frame.data.length + FRAME_HEADER != bytes.length)
+      throw new IOException("Frame length mismatch");
+    frame.end = ref.offset + ref.length;
+    return frame;
+  }
+
   public static void footer(RandomAccessFile out, long root, long spatial) throws IOException {
-    long position = out.getFilePointer();
-    out.seek(8);
-    int version = out.readInt();
-    out.seek(position);
-    long size = position + FOOTER_SIZE;
-    ByteBuffer b = ByteBuffer.allocate(32);
-    b.putLong(FOOTER_MAGIC).putLong(root).putLong(spatial).putLong(size);
-    out.write(b.array());
-    out.writeInt(crc(b.array()));
-    out.writeInt(version);
+    FrameRef a = FrameRef.at(out, root), b = FrameRef.at(out, spatial);
+    ByteBuffer bytes = ByteBuffer.allocate(FOOTER_SIZE);
+    bytes
+        .putLong(FOOTER_MAGIC)
+        .put(a.bytes())
+        .put(b.bytes())
+        .putLong(out.getFilePointer() + FOOTER_SIZE)
+        .putInt(VERSION)
+        .putInt(0);
+    bytes.putInt(crc(java.util.Arrays.copyOf(bytes.array(), 56))).putInt(0);
+    out.write(bytes.array());
   }
 
   public static long[] footer(RangeSource source) throws IOException {
@@ -112,20 +132,23 @@ public final class Frames {
     if (size < HEADER_SIZE + FOOTER_SIZE) throw new IOException("Truncated container");
     byte[] bytes = source.read(size - FOOTER_SIZE, FOOTER_SIZE);
     ByteBuffer b = ByteBuffer.wrap(bytes);
-    long magic = b.getLong(), root = b.getLong(), spatial = b.getLong(), storedSize = b.getLong();
-    int crc = b.getInt(), version = b.getInt();
+    long magic = b.getLong(),
+        root = b.getLong(),
+        rootLength = b.getLong(),
+        spatial = b.getLong(),
+        spatialLength = b.getLong(),
+        storedSize = b.getLong();
+    int version = b.getInt(), reserved = b.getInt(), checksum = b.getInt(), tail = b.getInt();
     if (magic != FOOTER_MAGIC
         || storedSize != size
-        || (version != 1 && version != 2)
-        || crc != crc(java.util.Arrays.copyOf(bytes, 32)))
+        || version != VERSION
+        || reserved != 0
+        || tail != 0
+        || checksum != crc(java.util.Arrays.copyOf(bytes, 56)))
       throw new IOException("Invalid/truncated footer");
-    if (root < HEADER_SIZE
-        || root >= size - FOOTER_SIZE
-        || spatial < 0
-        || spatial >= size - FOOTER_SIZE) throw new IOException("Invalid footer pointers");
-    int headerVersion =
-        checkHeader(new DataInputStream(new ByteArrayInputStream(source.read(0, HEADER_SIZE))));
-    if (version != headerVersion) throw new IOException("Header/footer version mismatch");
-    return new long[] {root, spatial};
+    new FrameRef(root, rootLength).validate(size - FOOTER_SIZE);
+    if (spatial != 0) new FrameRef(spatial, spatialLength).validate(size - FOOTER_SIZE);
+    else if (spatialLength != 0) throw new IOException("Invalid empty spatial reference");
+    return new long[] {root, spatial, rootLength, spatialLength};
   }
 }

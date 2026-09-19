@@ -109,7 +109,7 @@ public class WkbTest {
     SpatialIndex.add(output, "Tiny.Data.Item", "point", null);
     try (IliContainer c = IliContainer.open(output);
         GisLayer layer = c.openLayer("Tiny.Data.Item.point")) {
-      assertEquals(2, c.metadata().formatVersion());
+      assertEquals(3, c.metadata().formatVersion());
       assertEquals(2, c.layers().size());
       List<GisFeature> features;
       try (Stream<GisFeature> s = layer.features()) {
@@ -222,7 +222,7 @@ public class WkbTest {
       } catch (IllegalStateException expected) {
       }
       Frames.Frame metadata = c.frameStore().read(Frames.HEADER_SIZE);
-      assertFalse(
+      assertTrue(
           ch.interlis.ilicontainer.codec.Cbor.MAPPER
               .readTree(metadata.data)
               .has("geometryEncoding"));

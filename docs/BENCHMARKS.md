@@ -84,3 +84,32 @@ erscheint als `create-rejected` mit Diagnose; es erfolgt keine Datenkonversion
 in ein anderes Profil und kein stiller Rückfall auf IOM.
 
 [Rohwerte und Vergleich der WKB-Matrix](benchmarks/wkb/README.md).
+
+## Format-3-Optimierungen reproduzieren
+
+[Einordnung und Empfehlungen](benchmarks/format3/ASSESSMENT.md), [vollständige Messwerte](benchmarks/format3/README.md), [Rohwerte](benchmarks/format3/results.json) und [Distributions-Hashes/Parameter](benchmarks/format3/run.json).
+
+Die früheren Ergebnisse oben dokumentieren die damaligen Formate. Neue Container werden aus den XTF-Quellen erstellt; der aktuelle Reader liest keine alten Container.
+
+```sh
+./gradlew test installDist
+python3 scripts/benchmark-format3.py
+python3 scripts/benchmark-format3-controls.py benchmark-data/format3
+python3 scripts/report-format3.py benchmark-data/format3 docs/benchmarks/format3
+```
+
+Vor dem Umbau wurde die Distribution unter `benchmark-data/format3-reference/distribution` mit Manifest gesichert. Das Skript prüft sämtliche Referenzdateien gegen deren SHA-256. Für eine neue Maschine ist diese gesicherte Distribution bereitzustellen oder aus dem im Manifest genannten Commit getrennt zu bauen; der Hash eines Neubaus ist gesondert festzuhalten. Legacy-Code wird nicht in die aktuelle Bibliothek eingebunden.
+
+Das Skript kopiert auch die aktuelle Distribution in sein Ergebnisverzeichnis. Ein kleiner Worker-JAR enthält ausschliesslich Messcode und den verzögerten Loopback-Server. Derselbe Worker wird mit jeweils einer isolierten Bibliothek gestartet. Jeder Fall schreibt Parameter, Bibliotheks- und Eingabe-Hash, Rohmessungen sowie ein Abschlusskennzeichen. `--dataset` begrenzt die Datensätze, `--only` die Varianten; `--repeats` und `--delays` erlauben ausdrücklich kleinere Probeläufe. Standard sind drei Wiederholungen und lokal/HTTP 0/20/80 ms. Das vollständige Raster ist ein längerer expliziter Benchmark, kein normaler Test.
+
+Die erste Referenz legt TID und 23 Fenster fest: die drei bisherigen zentralen Fenster plus 20 Fenster um tatsächlich vorhandene Geometrien, Seed 20260917. Dieselben Fenster werden für alle Varianten verwendet. FID-Zugriffe zielen auf dasselbe Objekt; bei der IOM-Referenz fehlt die Funktion und wird als nicht verfügbar ausgewiesen. Der synthetische Millionenbestand wird lokal erzeugt und gezielt mit vier Core-Varianten verglichen: Referenz/Format 3 × IOM/WKB bei 256 KiB. Dabei werden Verzeichnisbytes, Erstellung, Roundtrip, Vollscan sowie TID-/FID-Zugriffe lokal und mit denselben HTTP-Latenzen gemessen. Ein Spatial Index wird für diese Verzeichnisbewertung nicht erstellt. Zusammen mit den 48 Varianten der drei realen Datensätze sind dies 52 Messfälle. Alle Worker laufen mit 384 MiB Heap.
+
+`heapPeakPoolSumBytes` ist die Summe der Spitzenwerte der JVM-Heap-Pools während der Operation, keine RSS-Messung. Temporärer Speicher wird beim Erstellen periodisch abgetastet. HTTP-Latenz wird pro Anfrage im lokalen Testserver hinzugefügt. Netzwerktransfer ausserhalb der Loopback-Verbindung und Betriebssystemcache-Effekte werden damit nicht simuliert.
+
+Rohdaten unterscheiden `logicalReads`/`logicalBytes` (Frameanforderungen einschliesslich Cache), `requests`/`bytesRead` (RangeSource; bei HTTP tatsächliche Anfragen/Bytes), `prefetchedBytes` (vorab geladene Framebytes), `additionalRangeBytes` (Zwischenräume), Index-/Metadaten-/Chunkbytes und Cachebelegung. Öffnen wird separat aufgezeichnet. Header und Footer sind in `bytesRead` enthalten; die Kategorien für Metadaten, Index und Chunks zählen dagegen Framebytes. `prefetchedBytes` zählt vorab geladene benötigte Frames, `additionalRangeBytes` nur zusätzlich übertragene Zwischenräume. Alte Referenzmetriken haben naturgemäss nicht alle neuen Felder. `info --storage` weist die physischen Verzeichnisanteile aus.
+
+Die veröffentlichte Format-3-Matrix wurde lokal auf Apple M1 mit 16 GiB RAM, macOS 15.7.9 und Java 21.0.7 ausgeführt. Der GDAL-Test läuft separat in einem Linux-Container mit GDAL 3.11.4. Die Latenzmessungen verwenden weiterhin den lokalen HTTP-Server; sie sind keine Messung eines öffentlichen Objektspeichers.
+
+Nach der Abfragematrix ergänzt `benchmark-format3-controls.py` zwei weitere Erstellungs-, Indexaufbau- und Exportmessungen je Variante. Zusammen mit der ersten Beobachtung sind dies drei Wiederholungen; dieselben isolierten Bibliotheken und Parameter werden verwendet. Die zusätzlichen Container werden danach gelöscht, ihre Rohwerte bleiben erhalten. Der semantische Roundtrip wird im Hauptlauf geprüft; die zusätzlichen Zeitmessungen wiederholen diese Prüfung nicht. Der Bericht prüft unveränderte Eingabe-/Bibliotheks-Digests und Dateigrössen und markiert die Gegenkontrollen bis zum vollständigen Abschluss separat. `--report docs/benchmarks/format3` aktualisiert den Bericht nach jedem Fall.
+
+`run.json` hält die Worker-Hashes für Abfragen, synthetische Core-Vergleiche und zusätzliche Gegenkontrollen getrennt fest. Innerhalb jeder Messart verwendet der Vergleich denselben Worker für Referenz und Format 3. Der gespeicherte `productionProof` weist zusätzlich nach, dass die 87 Produktionsklassen der eingefrorenen Format-3-Bibliothek und des aktuellen Builds bytegleich sind; Unterschiede betreffen ausschliesslich Messcode.

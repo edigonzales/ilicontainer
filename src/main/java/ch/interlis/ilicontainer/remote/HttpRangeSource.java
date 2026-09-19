@@ -12,6 +12,7 @@ public final class HttpRangeSource implements RangeSource {
   private final RemoteOptions options;
   private final ReadMetrics metrics;
   private long length = -1;
+  private byte[] initialHeader;
   private String etag;
   private boolean closed;
   private LocalSource snapshot;
@@ -25,7 +26,7 @@ public final class HttpRangeSource implements RangeSource {
     this.options = options;
     this.metrics = metrics;
     try {
-      fetch(0, 1, true);
+      initialHeader = fetch(0, 16, true);
     } catch (IOException e) {
       close();
       throw e;
@@ -46,6 +47,7 @@ public final class HttpRangeSource implements RangeSource {
     if (offset < 0 || count < 0 || offset > size() - count)
       throw new EOFException("Range outside remote container");
     if (count == 0) return new byte[0];
+    if (offset == 0 && count == 16 && initialHeader != null) return initialHeader.clone();
     if (snapshot != null) return snapshot.read(offset, count);
     return fetch(offset, count, false);
   }

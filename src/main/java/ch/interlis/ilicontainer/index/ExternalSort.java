@@ -9,10 +9,16 @@ import java.util.*;
 public final class ExternalSort implements AutoCloseable {
   public static final class Entry {
     public final String key;
+    public final byte[] binaryKey;
     public final byte[] value;
 
     public Entry(String key, byte[] value) {
-      this.key = key;
+      this(key.getBytes(java.nio.charset.StandardCharsets.UTF_8), value);
+    }
+
+    public Entry(byte[] key, byte[] value) {
+      this.binaryKey = key;
+      this.key = new String(key, java.nio.charset.StandardCharsets.UTF_8);
       this.value = value;
     }
   }
@@ -24,6 +30,7 @@ public final class ExternalSort implements AutoCloseable {
   private final List<Path> runs = new ArrayList<Path>();
   private final List<List<Path>> levels = new ArrayList<List<Path>>();
   private boolean finished;
+  private boolean structured;
 
   public ExternalSort(Path directory, long budget) {
     this.directory = directory;
@@ -32,15 +39,26 @@ public final class ExternalSort implements AutoCloseable {
     for (int i = 0; i < 16; i++) levels.add(new ArrayList<Path>());
   }
 
+  public ExternalSort(Path directory, long budget, boolean structured) {
+    this(directory, budget);
+    this.structured = structured;
+  }
+
   public void add(String key, byte[] value) throws IOException {
+    add(
+        structured ? Keys.encode(key) : key.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        value);
+  }
+
+  public void add(byte[] key, byte[] value) throws IOException {
     if (finished) throw new IllegalStateException("Sort already finished");
     pending.add(new Entry(key, value));
-    used += 64 + key.length() * 2L + value.length;
+    used += 64 + key.length * 1L + value.length;
     if (used >= budget) flush();
   }
 
   public static void write(DataOutput out, Entry e) throws IOException {
-    byte[] k = e.key.getBytes("UTF-8");
+    byte[] k = e.binaryKey;
     out.writeInt(k.length);
     out.write(k);
     out.writeInt(e.value.length);
@@ -62,12 +80,12 @@ public final class ExternalSort implements AutoCloseable {
     if (size < 0) throw new IOException("Invalid sort value length");
     byte[] v = new byte[size];
     in.readFully(v);
-    return new Entry(new String(k, "UTF-8"), v);
+    return new Entry(k, v);
   }
 
   private void flush() throws IOException {
     if (pending.isEmpty()) return;
-    pending.sort(Comparator.comparing(e -> e.key));
+    pending.sort((a, b) -> Keys.compare(a.binaryKey, b.binaryKey));
     Path run = Files.createTempFile(directory, "sort-", ".run");
     try (DataOutputStream out =
         new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(run)))) {
@@ -136,7 +154,7 @@ public final class ExternalSort implements AutoCloseable {
   private static final class Merge implements CloseableIterator<Entry> {
     private final List<DataInputStream> inputs = new ArrayList<DataInputStream>();
     private final PriorityQueue<Item> heap =
-        new PriorityQueue<Item>(Comparator.comparing(x -> x.entry.key));
+        new PriorityQueue<Item>((a, b) -> Keys.compare(a.entry.binaryKey, b.entry.binaryKey));
 
     private static final class Item {
       int input;

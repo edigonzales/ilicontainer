@@ -8,6 +8,8 @@ Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren
 - [Optionales WKB-Profil und direkte GIS-API](docs/WKB.md)
 - [Benchmarks und Reproduktion](docs/BENCHMARKS.md)
 
+**Kompatibilitätsbruch:** Reader und Writer unterstützen ausschliesslich Containerformat 3. Dateien der Formate 1 und 2 müssen aus den ursprünglichen XTF-Quellen neu erstellt werden.
+
 ## Build und Tests
 
 Java 21 ist für Build und Ausführung erforderlich. Der Quellcode wird mit `--release 8` kompiliert; eine Java-8-Laufzeit wird nicht zugesagt. Buildsystem: Gradle Groovy DSL mit gepinntem Wrapper und gesperrten Abhängigkeiten.
@@ -44,6 +46,10 @@ Optionen für `create`:
 | `--embed-models` | ILI-Quellen samt Abhängigkeiten zusätzlich einbetten |
 | `--overwrite` | Bestehende Zieldatei nach erfolgreichem Schreiben ersetzen |
 | `--spatial Klasse:Attribut` | Optionalen Index nach Erstellung des Core ergänzen |
+| `--spatial-order Klasse.Attribut` | Optionale Hilbert-Sortierung innerhalb jeder Basket-/Klassen-Gruppe |
+| `--spatial-packing` | `str`; alternativ `x` für Vergleichsmessungen |
+| `--geometry-encoding` | `iom`; alternativ `wkb` für direkten GIS-Zugriff |
+| `--geometry-crs Klasse.Attribut=CRS` | Explizite Geometrie-CRS-Zuordnung, wenn das Modell keine eindeutige Zuordnung liefert |
 | `--crs EPSG:2056` | Explizite CRS-Angabe für Indexierung, wenn erforderlich |
 
 Es findet keine obligatorische vollständige Modellvalidierung statt. Unlesbare oder nicht darstellbare Inhalte, unzulässige Transferarten und doppelte Identitäten werden abgelehnt. OID-lose Assoziationen bleiben erhalten.
@@ -71,6 +77,21 @@ ilicontainer bbox-candidates data.ilic Model.Topic.Class Geometrie \
 
 Gesucht wird zweidimensional im CRS des Index. Randberührungen zählen; Z-Werte bleiben gespeichert, beeinflussen die Suche aber nicht. Es gibt keine Transformation und keine exakte Intersects-Prüfung. Ohne passenden Index erfolgt ein Fehler statt eines automatischen Full Scans. Nicht zuverlässig indexierbare Geometrien führen zum Indexfehler; die vorhandene Core-Datei bleibt verfügbar.
 
+## Datenanordnung und Diagnose
+
+```sh
+ilicontainer create data.xtf spatial.ilic --model-dir ./models \
+  --geometry-encoding wkb \
+  --geometry-crs Model.Topic.Class.Geometrie=EPSG:2056 \
+  --spatial-order Model.Topic.Class.Geometrie \
+  --spatial Model.Topic.Class:Geometrie --crs EPSG:2056
+ilicontainer info spatial.ilic --storage
+```
+
+`--spatial-order` ist je Klasse einmal und für mehrere Klassen wiederholbar. Es sortiert Hauptobjekte innerhalb derselben Basket-/Klassen-Gruppe; Basket-, LIST- und Beziehungsreihenfolgen bleiben erhalten. FIDs entstehen nach der Sortierung und sind innerhalb einer Datei stabil. Beim Neuerstellen mit anderer Anordnung können sie sich ändern; TIDs bleiben erhalten. Objekte ohne Geometrie stehen am Gruppenende.
+
+Die STR-Packung des Index und die Hilbert-Anordnung der Daten sind unabhängig: Ein vorhandener Container kann einen STR-Index erhalten, ohne seine Daten-Chunks umzuordnen. Eine andere Datenanordnung erfordert die Neuerstellung aus XTF. `info --storage` liest für die physische Bytebilanz sämtliche Abschnittsheader und Verzeichnisse; bei HTTP ist dies eine umfassende Diagnose, keine kleine Einzelobjektabfrage.
+
 ## HTTP Range Access
 
 ```sh
@@ -93,5 +114,17 @@ try (IliContainer container = IliContainer.open(Paths.get("data.ilic"));
 ```
 
 `fragment.baskets()` liefert auch selektierte leere Baskets. Die Basket- und Objektansichten können unabhängig gelesen werden. Vollständiges Lesen erfolgt mit `container.openTransferReader()` oder direkt sequenziell mit `IliContainer.stream(inputStream)` als IOX-Eventfolge. Der Reader übernimmt den ihm übergebenen Eingabestream und muss geschlossen werden.
+
+Für Vergleichsmessungen kann das räumliche Vorladen über die Java-API deaktiviert werden:
+
+```java
+RemoteOptions options = new RemoteOptions();
+options.prefetchPositions = 0;
+try (IliContainer container = IliContainer.open(uri, options)) {
+    // Abfragen verwenden weiterhin denselben begrenzten Framecache.
+}
+```
+
+Standardmässig werden höchstens 32 Objektpositionen vorausgelesen. Bytebereiche werden nur bei höchstens 4 KiB Abstand und bis zu insgesamt 1 MiB zusammengefasst. Vorab geladene Frames und normale Lesezugriffe teilen sich den 32-MiB-Cache; Frames oberhalb des Cachebudgets werden bei Bedarf gelesen und nicht dauerhaft gespeichert. `RemoteOptions` ist auch bei `open(Path, options)` verwendbar. Chunk-Grösse, räumliche Anordnung und Vorladen sind anhand des eigenen Abfragemusters zu vergleichen; die [Messmatrix](docs/benchmarks/format3/README.md) weist auch Verschlechterungen aus.
 
 Die Distribution enthält Bibliotheks-JAR, Abhängigkeiten und Startskripte. Noch keine Veröffentlichung in einem Maven-Repository und keine langfristige Garantie für Dateiformat oder API.

@@ -17,7 +17,7 @@ public final class ObjectCursor implements CloseableIterator<IomObject> {
     parser = Cbor.MAPPER.getFactory().createParser(chunk.objects);
     this.codec = codec;
     remaining = chunk.info.count;
-    firstFid = chunk.info.firstFid == null ? -1 : chunk.info.firstFid;
+    firstFid = chunk.info.firstFid;
   }
 
   public boolean hasNext() {

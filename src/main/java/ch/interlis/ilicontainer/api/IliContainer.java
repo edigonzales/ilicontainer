@@ -22,10 +22,16 @@ public final class IliContainer implements AutoCloseable {
   private final long[] roots;
   private final ReadMetrics metrics;
   private boolean closed;
+  private final RemoteOptions readOptions;
 
   public static IliContainer open(Path path) throws IOException {
+    return open(path, new RemoteOptions());
+  }
+
+  public static IliContainer open(Path path, RemoteOptions options) throws IOException {
+    options.validate();
     ReadMetrics m = new ReadMetrics();
-    return new IliContainer(new LocalSource(path, m), m, 32L * 1024 * 1024);
+    return new IliContainer(new LocalSource(path, m), m, options);
   }
 
   public static IliContainer open(URI uri) throws IOException {
@@ -33,15 +39,18 @@ public final class IliContainer implements AutoCloseable {
   }
 
   public static IliContainer open(URI uri, RemoteOptions options) throws IOException {
-    if ("file".equals(uri.getScheme())) return open(Paths.get(uri));
+    options.validate();
+    if ("file".equals(uri.getScheme())) return open(Paths.get(uri), options);
     ReadMetrics m = new ReadMetrics();
-    return new IliContainer(new HttpRangeSource(uri, options, m), m, options.cacheBytes);
+    return new IliContainer(new HttpRangeSource(uri, options, m), m, options);
   }
 
-  private IliContainer(RangeSource source, ReadMetrics metrics, long cache) throws IOException {
+  private IliContainer(RangeSource source, ReadMetrics metrics, RemoteOptions options)
+      throws IOException {
     this.source = source;
     this.metrics = metrics;
-    store = new FrameStore(source, metrics, cache);
+    readOptions = options;
+    store = new FrameStore(source, metrics, options.cacheBytes);
     try {
       int formatVersion =
           Frames.checkHeader(
@@ -54,11 +63,46 @@ public final class IliContainer implements AutoCloseable {
         throw new IOException("Unsupported transfer/mapping version");
       metadata.validateFormat(formatVersion);
       codec = new ObjectCodec(metadata, true);
-      tree = new BTree(store, roots[0]);
+      tree = new BTree(store, new FrameRef(roots[0], roots[2]));
     } catch (IOException e) {
       source.close();
       throw e;
     }
+  }
+
+  public CloseableIterator<Location> prefetch(final CloseableIterator<Location> input) {
+    if (readOptions.prefetchPositions == 0) return input;
+    return new CloseableIterator<Location>() {
+      final Deque<Location> ready = new ArrayDeque<Location>();
+
+      public boolean hasNext() {
+        return !ready.isEmpty() || input.hasNext();
+      }
+
+      public Location next() {
+        if (ready.isEmpty()) {
+          List<FrameRef> refs = new ArrayList<FrameRef>();
+          for (int i = 0; i < readOptions.prefetchPositions && input.hasNext(); i++) {
+            Location loc = input.next();
+            ready.add(loc);
+            refs.add(new FrameRef(loc.basketOffset, loc.basketLength));
+            if (loc.chunkOffset != 0) refs.add(new FrameRef(loc.chunkOffset, loc.chunkLength));
+          }
+          try {
+            store.prefetch(refs, readOptions.prefetchMaxGap, readOptions.prefetchMaxBytes);
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        }
+        if (ready.isEmpty()) throw new NoSuchElementException();
+        return ready.removeFirst();
+      }
+
+      public void close() throws IOException {
+        ready.clear();
+        input.close();
+      }
+    };
   }
 
   public void checkOpen() {
@@ -80,6 +124,14 @@ public final class IliContainer implements AutoCloseable {
 
   public long indexRoot() {
     return roots[0];
+  }
+
+  public FrameRef indexRef() {
+    return new FrameRef(roots[0], roots[2]);
+  }
+
+  public FrameRef spatialRef() {
+    return new FrameRef(roots[1], roots[3]);
   }
 
   public long spatialRoot() {
@@ -113,7 +165,7 @@ public final class IliContainer implements AutoCloseable {
 
       public Location next() {
         try {
-          return Cbor.read(it.next().value, Location.class);
+          return Location.decode(it.next().value);
         } catch (IOException e) {
           throw new UncheckedIOException(e);
         }
@@ -140,11 +192,24 @@ public final class IliContainer implements AutoCloseable {
     return new GisLayer(this, id);
   }
 
-  Fragment getFid(long fid) {
+  public Fragment getFid(long fid) {
     checkOpen();
     return new Fragment(
         this,
-        () -> singleton(fid < 0 ? null : tree.get("F\0" + FilesEx.number(fid))),
+        () -> {
+          ExternalSort.Entry e = fid < 0 ? null : tree.floor("F\0" + FilesEx.number(fid));
+          if (e == null || !Keys.startsWith(e.binaryKey, Keys.encode("F\0")))
+            return singleton(null);
+          if (e.value.length != 57) throw new IOException("Invalid FID range");
+          long first = java.nio.ByteBuffer.wrap(e.binaryKey, e.binaryKey.length - 8, 8).getLong();
+          int count = java.nio.ByteBuffer.wrap(e.value, 53, 4).getInt();
+          if (count < 1 || first < 0 || first > Long.MAX_VALUE - count)
+            throw new IOException("Invalid FID count");
+          if (fid - first >= count) return singleton(null);
+          Location loc = Location.decode(Arrays.copyOf(e.value, 53));
+          loc.ordinal = (int) (fid - first);
+          return singleton(loc.bytes());
+        },
         "FID " + fid);
   }
 
@@ -174,7 +239,7 @@ public final class IliContainer implements AutoCloseable {
         () -> {
           byte[] value = tree.get("B\0" + bid);
           if (value == null) return singleton(null);
-          Location loc = Cbor.read(value, Location.class);
+          Location loc = Location.decode(value);
           final CloseableIterator<Location> rest =
               range("D\0" + FilesEx.number(loc.basketPosition) + "\0");
           return new CloseableIterator<Location>() {
@@ -201,7 +266,7 @@ public final class IliContainer implements AutoCloseable {
   }
 
   private static CloseableIterator<Location> singleton(byte[] bytes) throws IOException {
-    final Location loc = bytes == null ? null : Cbor.read(bytes, Location.class);
+    final Location loc = bytes == null ? null : Location.decode(bytes);
     return new CloseableIterator<Location>() {
       boolean available = loc != null;
 
@@ -223,7 +288,7 @@ public final class IliContainer implements AutoCloseable {
 
   public BasketContext basket(Location loc) throws IOException {
     checkOpen();
-    Frames.Frame f = store.read(loc.basketOffset);
+    Frames.Frame f = store.read(new FrameRef(loc.basketOffset, loc.basketLength));
     if (f.type != Frames.BASKET) throw new IOException("Invalid basket reference");
     BasketContext b = Cbor.read(f.data, BasketContext.class);
     if (b.position != loc.basketPosition) throw new IOException("Basket position mismatch");
@@ -232,7 +297,7 @@ public final class IliContainer implements AutoCloseable {
 
   public ObjectCursor objects(Location loc) throws IOException {
     checkOpen();
-    Frames.Frame f = store.read(loc.chunkOffset);
+    Frames.Frame f = store.read(new FrameRef(loc.chunkOffset, loc.chunkLength));
     if (f.type != Frames.CHUNK) throw new IOException("Invalid chunk reference");
     Chunk c = Chunk.unpack(f.data);
     if (c.info.id != loc.chunkId

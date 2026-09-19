@@ -94,10 +94,21 @@ public final class Main implements Runnable {
         description = "Fully qualified class plus geometry attribute, separated by a colon.")
     List<String> indexes = new ArrayList<String>();
 
+    @Option(names = "--spatial-packing", defaultValue = "str")
+    String packing;
+
     @Option(names = "--crs")
     String crs;
 
+    @Option(
+        names = "--spatial-order",
+        description = "Class.Attribute; repeatable for distinct classes")
+    List<String> spatialOrder = new ArrayList<String>();
+
     public Integer call() throws Exception {
+      SpatialIndexOptions spatialOptions = new SpatialIndexOptions();
+      spatialOptions.packing = packing;
+      spatialOptions.validate();
       WriterOptions o = new WriterOptions();
       o.modelPaths.addAll(modelDirs);
       o.modelFiles.addAll(modelFiles);
@@ -109,11 +120,18 @@ public final class Main implements Runnable {
       o.numericEncoding = numeric;
       o.geometryEncoding = geometry;
       o.geometryCrs.putAll(geometryCrs);
+      for (String order : spatialOrder) {
+        int split = order.lastIndexOf('.');
+        if (split < 1 || split == order.length() - 1)
+          throw new IllegalArgumentException("Expected --spatial-order Class.Attribute");
+        if (o.spatialOrder.put(order.substring(0, split), order.substring(split + 1)) != null)
+          throw new IllegalArgumentException("Only one spatial ordering attribute per class");
+      }
       ContainerWriter.create(input, output, o);
       for (String index : indexes) {
         String[] p = index.split(":", 2);
         if (p.length != 2) throw new IllegalArgumentException("Expected --spatial Class:Attribute");
-        SpatialIndex.add(output, p[0], p[1], crs);
+        SpatialIndex.add(output, p[0], p[1], crs, spatialOptions);
       }
       return 0;
     }
@@ -142,6 +160,9 @@ public final class Main implements Runnable {
 
   @Command(name = "info", mixinStandardHelpOptions = true)
   public static final class Info extends ReadCommand implements Callable<Integer> {
+    @Option(names = "--storage", description = "Physical bytes by section and directory entry type")
+    boolean storage;
+
     public Integer call() throws Exception {
       try (IliContainer c = open()) {
         Map<String, Object> info = new LinkedHashMap<String, Object>();
@@ -156,6 +177,9 @@ public final class Main implements Runnable {
         info.put("classes", c.metadata().classes.keySet());
         info.put("numericEncoding", c.metadata().numericEncoding);
         info.put("spatialIndexes", SpatialIndex.manifest(c));
+        info.put("spatialOrder", c.metadata().spatialOrder);
+        if (storage)
+          info.put("storage", ch.interlis.ilicontainer.container.StorageDiagnostics.inspect(c));
         System.out.println(
             new com.fasterxml.jackson.databind.ObjectMapper()
                 .writerWithDefaultPrettyPrinter()
@@ -299,11 +323,16 @@ public final class Main implements Runnable {
     @Parameters(index = "2")
     String attr;
 
+    @Option(names = "--spatial-packing", defaultValue = "str")
+    String packing;
+
     @Option(names = "--crs")
     String crs;
 
     public Integer call() throws Exception {
-      SpatialIndex.add(input, cls, attr, crs);
+      SpatialIndexOptions options = new SpatialIndexOptions();
+      options.packing = packing;
+      SpatialIndex.add(input, cls, attr, crs, options);
       return 0;
     }
   }

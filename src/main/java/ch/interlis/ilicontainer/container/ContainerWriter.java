@@ -28,27 +28,30 @@ public final class ContainerWriter {
     options.objectDirectoryEntryBytes = 0;
     try {
       ModelBridge bridge = ModelBridge.load(input, options, temp);
+      for (Map.Entry<String, String> order : options.spatialOrder.entrySet()) {
+        if (!bridge.metadata.geometryCrs.containsKey(order.getKey() + "." + order.getValue()))
+          throw new IOException(
+              "Unknown direct geometry attribute for spatial ordering: "
+                  + order.getKey()
+                  + "."
+                  + order.getValue());
+      }
+      bridge.metadata.spatialOrder.putAll(options.spatialOrder);
       ObjectCodec codec = new ObjectCodec(bridge.metadata, false);
       try (ExternalSort objects = new ExternalSort(temp, options.sortMemoryBytes);
-          ExternalSort index = new ExternalSort(temp, options.sortMemoryBytes)) {
+          ExternalSort index = new ExternalSort(temp, options.sortMemoryBytes, true)) {
         spool(input, bridge, codec, objects, temp);
         options.geometryVerificationNanos = bridge.metadata.geometryVerificationNanos;
         try (RandomAccessFile out = new RandomAccessFile(output.toFile(), "rw");
-            CloseableIterator<ExternalSort.Entry> records = objects.finish()) {
-          Frames.header(out, bridge.metadata.formatVersion());
+            CloseableIterator<ExternalSort.Entry> records =
+                ch.interlis.ilicontainer.spatial.SpatialOrder.reorder(
+                    objects.finish(), codec, bridge.metadata, options, temp)) {
+          Frames.header(out);
           com.fasterxml.jackson.databind.node.ObjectNode storedMetadata =
               Cbor.MAPPER.valueToTree(bridge.metadata);
-          if (bridge.metadata.formatVersion() == 1)
-            storedMetadata.remove(
-                Arrays.asList(
-                    "geometryEncoding",
-                    "geometryProfile",
-                    "geometries",
-                    "scalarTypes",
-                    "concreteClasses"));
           Frames.write(out, Frames.METADATA, Cbor.bytes(storedMetadata));
           BasketContext basket = null;
-          long basketOffset = 0, chunkId = 0, fid = 0;
+          long basketOffset = 0, basketLength = 0, chunkId = 0, fid = 0;
           Chunk.Info info = null;
           ByteArrayOutputStream raw = new ByteArrayOutputStream();
           List<String> tids = new ArrayList<String>();
@@ -64,8 +67,10 @@ public final class ContainerWriter {
               if (basket != null) Frames.write(out, Frames.END_BASKET, new byte[0]);
               basket = Cbor.read(record.value, BasketContext.class);
               basketOffset = Frames.write(out, Frames.BASKET, record.value);
-              Location loc = new Location(0, basketOffset, basket.position, 0, -1);
-              byte[] locBytes = Cbor.bytes(loc);
+              basketLength = out.getFilePointer() - basketOffset;
+              Location loc =
+                  new Location(0, basketOffset, basket.position, 0, -1).lengths(0, basketLength);
+              byte[] locBytes = loc.bytes();
               index.add("B\0" + basket.bid, locBytes);
               index.add("P\0" + FilesEx.number(basket.position), locBytes);
               index.add(
@@ -87,9 +92,10 @@ public final class ContainerWriter {
               if (info == null) {
                 info = new Chunk.Info();
                 info.id = chunkId++;
-                if (bridge.metadata.formatVersion() == 2) info.firstFid = fid;
+                info.firstFid = fid;
                 info.basketPosition = basket.position;
                 info.basketOffset = basketOffset;
+                info.basketLength = basketLength;
                 info.className = cls;
                 info.topic = basket.topic;
                 info.bid = basket.bid;
@@ -200,26 +206,24 @@ public final class ContainerWriter {
       throws IOException {
     byte[] packed = Chunk.pack(info, raw, options.compressionLevel);
     long offset = Frames.write(out, Frames.CHUNK, packed);
-    java.util.Map<String, Object> chunkEntry = new java.util.LinkedHashMap<String, Object>();
-    chunkEntry.put("offset", offset);
-    chunkEntry.put("compressedLength", packed.length);
-    chunkEntry.put("header", info);
-    index.add("N\0" + FilesEx.number(info.id), Cbor.bytes(chunkEntry));
-    Location all = new Location(offset, info.basketOffset, info.basketPosition, info.id, -1);
-    byte[] data = Cbor.bytes(all);
+    Location all =
+        new Location(offset, info.basketOffset, info.basketPosition, info.id, -1)
+            .lengths(packed.length + Frames.FRAME_HEADER, info.basketLength);
+    byte[] data = all.bytes();
     String order = FilesEx.number(info.basketPosition) + "\0" + FilesEx.number(info.id);
     index.add("C\0" + info.className + "\0" + order, data);
     index.add("D\0" + order, data);
     index.add("T\0" + info.topic + "\0" + order, data);
+    index.add(
+        "F\0" + FilesEx.number(info.firstFid),
+        java.nio.ByteBuffer.allocate(57).put(all.bytes()).putInt(info.count).array());
     for (int i = 0; i < tids.size(); i++) {
-      if ("wkb".equals(options.geometryEncoding))
-        index.add(
-            "F\0" + FilesEx.number(info.firstFid + i),
-            Cbor.bytes(new Location(offset, info.basketOffset, info.basketPosition, info.id, i)));
       if (tids.get(i) != null) {
         String key = "O\0" + tids.get(i);
         byte[] value =
-            Cbor.bytes(new Location(offset, info.basketOffset, info.basketPosition, info.id, i));
+            new Location(offset, info.basketOffset, info.basketPosition, info.id, i)
+                .lengths(packed.length + Frames.FRAME_HEADER, info.basketLength)
+                .bytes();
         index.add(key, value);
         options.objectDirectoryEntryBytes += 8 + key.getBytes("UTF-8").length + value.length;
       }

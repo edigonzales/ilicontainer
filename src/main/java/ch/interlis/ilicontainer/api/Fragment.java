@@ -34,7 +34,8 @@ public final class Fragment implements AutoCloseable {
 
   public CloseableIterator<Location> locations() throws IOException {
     check();
-    return locations.open();
+    CloseableIterator<Location> it = locations.open();
+    return description.startsWith("bbox candidates ") ? container.prefetch(it) : it;
   }
 
   private void check() {
@@ -103,7 +104,7 @@ public final class Fragment implements AutoCloseable {
   public Stream<SelectedObject> objects() {
     check();
     try {
-      final CloseableIterator<Location> refs = locations.open();
+      final CloseableIterator<Location> refs = locations();
       return stream(
           new CloseableIterator<SelectedObject>() {
             ObjectCursor cursor;

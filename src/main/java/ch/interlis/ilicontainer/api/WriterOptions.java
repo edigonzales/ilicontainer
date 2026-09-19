@@ -13,6 +13,7 @@ public final class WriterOptions {
   public String numericEncoding = "lexical";
   public String geometryEncoding = "iom";
   public final Map<String, String> geometryCrs = new TreeMap<String, String>();
+  public final Map<String, String> spatialOrder = new TreeMap<String, String>();
   public boolean embedModels;
   public boolean overwrite;
   public long sortMemoryBytes = 16L * 1024 * 1024;

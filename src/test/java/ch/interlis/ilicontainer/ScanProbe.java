@@ -13,6 +13,7 @@ public final class ScanProbe {
       if (args.length == 4) w.geometryEncoding = args[3];
       w.geometryCrs.put("Tiny.Data.Item.point", "EPSG:2056");
       w.geometryCrs.put("Tiny.Data.Item.line", "EPSG:2056");
+      w.spatialOrder.put("Tiny.Data.Item", "point");
       w.sortMemoryBytes = 1024 * 1024;
       ch.interlis.ilicontainer.container.ContainerWriter.create(
           Paths.get(args[0]), Paths.get(args[1]), w);

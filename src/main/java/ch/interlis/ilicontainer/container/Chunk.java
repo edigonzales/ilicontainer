@@ -7,11 +7,9 @@ import java.util.zip.*;
 
 public final class Chunk {
   public static final class Info {
-    public long id, basketPosition, basketOffset;
+    public long id, basketPosition, basketOffset, basketLength;
 
-    @com.fasterxml.jackson.annotation.JsonInclude(
-        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-    public Long firstFid;
+    public long firstFid;
 
     public String className, topic, bid, compression;
     public int count;
@@ -57,7 +55,9 @@ public final class Chunk {
     byte[] h = new byte[n];
     in.readFully(h);
     Info info = Cbor.read(h, Info.class);
-    if (info.count < 1
+    if (info.firstFid < 0
+        || info.firstFid > Long.MAX_VALUE - info.count
+        || info.count < 1
         || info.uncompressedLength < 0
         || info.uncompressedLength > Integer.MAX_VALUE - 32)
       throw new IOException("Invalid chunk dimensions");

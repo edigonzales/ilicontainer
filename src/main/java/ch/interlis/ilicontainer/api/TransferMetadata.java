@@ -6,6 +6,7 @@ import java.util.*;
 public final class TransferMetadata {
   @com.fasterxml.jackson.annotation.JsonIgnore public long geometryVerificationNanos;
   public int mappingVersion = 1;
+  public Map<String, String> spatialOrder = new TreeMap<String, String>();
   public String geometryEncoding = "iom", geometryProfile;
   public Map<String, GeometryDescriptor> geometries = new TreeMap<String, GeometryDescriptor>();
   public Map<String, String> scalarTypes = new TreeMap<String, String>();
@@ -21,13 +22,13 @@ public final class TransferMetadata {
   }
 
   public int formatVersion() {
-    return "wkb".equals(geometryEncoding) ? 2 : 1;
+    return 3;
   }
 
   public void validateFormat(int version) throws java.io.IOException {
     if (version != formatVersion()
         || !("iom".equals(geometryEncoding) || "wkb".equals(geometryEncoding))
-        || (version == 2 && !"wkb-iso-v1".equals(geometryProfile)))
+        || ("wkb".equals(geometryEncoding) && !"wkb-iso-v1".equals(geometryProfile)))
       throw new java.io.IOException("Unsupported geometry profile/header combination");
   }
 

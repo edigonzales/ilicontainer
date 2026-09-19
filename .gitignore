@@ -2,4 +2,5 @@
 build/
 benchmark-data/
 *.ilic
+!src/test/resources/format3/*.ilic
 .DS_Store

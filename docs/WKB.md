@@ -23,9 +23,8 @@ Unbekannte CRS benötigen eine explizite Zuordnung. Widersprüche zwischen Model
 Basket und expliziter Zuordnung führen zum Abbruch. Eine explizite Zuordnung ist
 eine Aussage des Aufrufers über vorhandene Koordinaten, keine Transformation.
 
-WKB-Dateien verwenden Containerformat 2. Der Reader unterstützt weiterhin
-Format 1; der IOM-Writer behält dessen Metadaten- und Chunk-Schema bei. Bestehende
-Dateien werden nicht verändert. Ein WKB-Erstellungsfehler veröffentlicht keine
+IOM- und WKB-Dateien verwenden ausschliesslich Containerformat 3. Alte Dateien
+der Formate 1 und 2 müssen aus ihren XTF-Quellen neu erstellt werden. Ein WKB-Erstellungsfehler veröffentlicht keine
 Zieldatei und überschreibt keine vorhandene Datei. Ein späterer Fehler beim
 optionalen Indexaufbau lässt den vollständigen Core-Container bestehen.
 
@@ -106,7 +105,7 @@ exakte Intersects-Prüfung. Die Bogenumhüllung verwendet dieselbe analytische,
 nach aussen gerundete Rechnung wie der IOM-Pfad.
 
 Alle Streams sind unabhängig und zu schliessen, insbesondere bei `findFirst()`.
-Auch Layer und Container sind zu schliessen. Die GIS-API verlangt Format 2; sie
+Auch Layer und Container sind zu schliessen. Die GIS-API verlangt das WKB-Profil; sie
 führt bei IOM-Dateien keine versteckte Konversion aus. Der Feature-Scan liest die
 CBOR-Objektrecords und liefert die gespeicherten WKB-Bytes ohne IOM-Rekonstruktion.
 

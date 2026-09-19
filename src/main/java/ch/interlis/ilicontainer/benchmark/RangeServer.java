@@ -15,6 +15,7 @@ public final class RangeServer implements AutoCloseable {
   public volatile int requests;
   public volatile int changeAfterRequests = Integer.MAX_VALUE;
   public volatile long bytesSent;
+  public volatile int delayMillis;
 
   public RangeServer(Path file) throws IOException {
     this.file = file;
@@ -53,6 +54,13 @@ public final class RangeServer implements AutoCloseable {
             line.substring(0, colon).toLowerCase(Locale.ROOT), line.substring(colon + 1).trim());
     }
     requests++;
+    if (delayMillis > 0)
+      try {
+        Thread.sleep(delayMillis);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException(e);
+      }
     String tag = mode.equals("changed") || requests > changeAfterRequests ? "\"v2\"" : "\"v1\"";
     OutputStream out = socket.getOutputStream();
     if (headers.containsKey("if-match") && !headers.get("if-match").equals(tag)) {

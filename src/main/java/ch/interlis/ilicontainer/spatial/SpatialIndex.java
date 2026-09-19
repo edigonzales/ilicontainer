@@ -16,13 +16,14 @@ public final class SpatialIndex {
 
   public static final class Info {
     public String className, attribute, crs, axes = "C1,C2";
-    public long root, count;
+    public long root, rootLength, count;
+    public String packing = "str";
   }
 
   public static final class Entry {
     public BoundingBox box;
-    public Location location;
-    public long child;
+    public byte[] location;
+    public long child, childLength;
   }
 
   public static final class Node {
@@ -35,12 +36,19 @@ public final class SpatialIndex {
 
   public static Manifest manifest(IliContainer c) throws IOException {
     if (c.spatialRoot() == 0) return new Manifest();
-    Frames.Frame f = c.frameStore().read(c.spatialRoot());
+    Frames.Frame f = c.frameStore().read(c.spatialRef());
     if (f.type != Frames.SPATIAL_MANIFEST) throw new IOException("Invalid spatial manifest");
     return Cbor.read(f.data, Manifest.class);
   }
 
   public static void add(Path path, String cls, String attr, String explicitCrs) throws Exception {
+    add(path, cls, attr, explicitCrs, new SpatialIndexOptions());
+  }
+
+  public static void add(
+      Path path, String cls, String attr, String explicitCrs, SpatialIndexOptions options)
+      throws Exception {
+    options.validate();
     Path parent = path.toAbsolutePath().getParent(),
         temp = Files.createTempDirectory(parent, ".ilic-spatial-"),
         output = Files.createTempFile(parent, ".ilic-spatial-", ".tmp");
@@ -90,11 +98,13 @@ public final class SpatialIndex {
                   e.box = box;
                   e.location =
                       new Location(
-                          loc.chunkOffset,
-                          loc.basketOffset,
-                          loc.basketPosition,
-                          loc.chunkId,
-                          ordinal);
+                              loc.chunkOffset,
+                              loc.basketOffset,
+                              loc.basketPosition,
+                              loc.chunkId,
+                              ordinal)
+                          .lengths(loc.chunkLength, loc.basketLength)
+                          .bytes();
                   entries.add(sortKey(box.minX) + FilesEx.number(count), Cbor.bytes(e));
                   count++;
                 }
@@ -109,7 +119,7 @@ public final class SpatialIndex {
           out.seek(out.length());
           long root;
           try (CloseableIterator<ExternalSort.Entry> sorted = entries.finish()) {
-            root = build(out, sorted, temp);
+            root = build(out, sorted, temp, options);
           }
           Manifest manifest = manifest(c);
           Info info = new Info();
@@ -117,7 +127,9 @@ public final class SpatialIndex {
           info.attribute = attr;
           info.crs = crs;
           info.root = root;
+          info.rootLength = FrameRef.at(out, root).length;
           info.count = count;
+          info.packing = options.packing;
           manifest.indexes.put(key(cls, attr), info);
           long manifestOffset = Frames.write(out, Frames.SPATIAL_MANIFEST, Cbor.bytes(manifest));
           Frames.footer(out, c.indexRoot(), manifestOffset);
@@ -146,6 +158,7 @@ public final class SpatialIndex {
         Frames.write(out, leaf ? Frames.SPATIAL_LEAF : Frames.SPATIAL_BRANCH, Cbor.bytes(node));
     Entry ref = new Entry();
     ref.child = offset;
+    ref.childLength = FrameRef.at(out, offset).length;
     for (Entry e : node.entries) {
       if (ref.box == null)
         ref.box = new BoundingBox(e.box.minX, e.box.minY, e.box.maxX, e.box.maxY);
@@ -154,59 +167,114 @@ public final class SpatialIndex {
     return ref;
   }
 
+  private static final int PAGE_BYTES = 16 * 1024;
+
+  private static double center(double low, double high) {
+    return low / 2 + high / 2;
+  }
+
+  /** Each level is independently sorted; only a stripe sorter and one node are resident. */
   private static long build(
-      RandomAccessFile out, CloseableIterator<ExternalSort.Entry> sorted, Path temp)
+      RandomAccessFile out,
+      CloseableIterator<ExternalSort.Entry> input,
+      Path temp,
+      SpatialIndexOptions options)
       throws IOException {
     Path current = Files.createTempFile(temp, "spatial-level-", ".run");
-    long count = 0;
-    try (DataOutputStream refs =
+    try (DataOutputStream data =
         new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(current)))) {
-      Node n = new Node();
-      while (sorted.hasNext()) {
-        n.entries.add(Cbor.read(sorted.next().value, Entry.class));
-        if (n.entries.size() == 64) {
-          ExternalSort.write(refs, new ExternalSort.Entry("", Cbor.bytes(writeNode(out, n, true))));
-          count++;
-          n = new Node();
-        }
-      }
-      if (!n.entries.isEmpty() || count == 0) {
-        ExternalSort.write(refs, new ExternalSort.Entry("", Cbor.bytes(writeNode(out, n, true))));
-        count++;
-      }
+      while (input.hasNext()) ExternalSort.write(data, input.next());
     }
-    while (count > 1) {
+    boolean leaf = true;
+    while (true) {
       Path next = Files.createTempFile(temp, "spatial-level-", ".run");
-      long ncount = 0;
-      try (DataInputStream in =
-              new DataInputStream(new BufferedInputStream(Files.newInputStream(current)));
-          DataOutputStream refs =
-              new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(next)))) {
-        Node n = new Node();
-        ExternalSort.Entry e;
-        while ((e = ExternalSort.read(in)) != null) {
-          n.entries.add(Cbor.read(e.value, Entry.class));
-          if (n.entries.size() == 64) {
-            ExternalSort.write(
-                refs, new ExternalSort.Entry("", Cbor.bytes(writeNode(out, n, false))));
-            ncount++;
-            n = new Node();
+      long count = 0, encodedBytes = 0;
+      try (ExternalSort x = new ExternalSort(temp, 16L * 1024 * 1024)) {
+        try (DataInputStream in =
+            new DataInputStream(new BufferedInputStream(Files.newInputStream(current)))) {
+          ExternalSort.Entry record;
+          while ((record = ExternalSort.read(in)) != null) {
+            Entry entry = Cbor.read(record.value, Entry.class);
+            double coordinate =
+                "str".equals(options.packing)
+                    ? center(entry.box.minX, entry.box.maxX)
+                    : entry.box.minX;
+            x.add(sortKey(coordinate) + FilesEx.number(count++), record.value);
+            encodedBytes += record.value.length;
           }
         }
-        if (!n.entries.isEmpty()) {
-          ExternalSort.write(
-              refs, new ExternalSort.Entry("", Cbor.bytes(writeNode(out, n, false))));
-          ncount++;
+        long pages = Math.max(1, (encodedBytes + PAGE_BYTES - 1) / PAGE_BYTES);
+        long stripes = "str".equals(options.packing) ? (long) Math.ceil(Math.sqrt(pages)) : 1;
+        long stripeCount = Math.max(1, (count + stripes - 1) / stripes);
+        try (CloseableIterator<ExternalSort.Entry> sorted = x.finish();
+            DataOutputStream refs =
+                new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(next)))) {
+          NodeWriter writer = new NodeWriter(out, refs, leaf);
+          if ("x".equals(options.packing)) {
+            while (sorted.hasNext()) writer.add(Cbor.read(sorted.next().value, Entry.class));
+          } else {
+            while (sorted.hasNext()) {
+              try (ExternalSort y = new ExternalSort(temp, 16L * 1024 * 1024)) {
+                for (long i = 0; i < stripeCount && sorted.hasNext(); i++) {
+                  ExternalSort.Entry record = sorted.next();
+                  Entry entry = Cbor.read(record.value, Entry.class);
+                  y.add(sortKey(center(entry.box.minY, entry.box.maxY)) + record.key, record.value);
+                }
+                try (CloseableIterator<ExternalSort.Entry> ys = y.finish()) {
+                  while (ys.hasNext()) writer.add(Cbor.read(ys.next().value, Entry.class));
+                }
+              }
+              writer.flush();
+            }
+          }
+          writer.flush();
+          if (writer.count == 0) writer.write();
+          count = writer.count;
         }
       }
       Files.delete(current);
       current = next;
-      count = ncount;
+      if (count == 1) {
+        try (DataInputStream in = new DataInputStream(Files.newInputStream(current))) {
+          return Cbor.read(ExternalSort.read(in).value, Entry.class).child;
+        } finally {
+          Files.delete(current);
+        }
+      }
+      leaf = false;
     }
-    try (DataInputStream in = new DataInputStream(Files.newInputStream(current))) {
-      return Cbor.read(ExternalSort.read(in).value, Entry.class).child;
-    } finally {
-      Files.delete(current);
+  }
+
+  private static final class NodeWriter {
+    final RandomAccessFile out;
+    final DataOutputStream refs;
+    final boolean leaf;
+    Node node = new Node();
+    long count;
+
+    NodeWriter(RandomAccessFile out, DataOutputStream refs, boolean leaf) {
+      this.out = out;
+      this.refs = refs;
+      this.leaf = leaf;
+    }
+
+    void add(Entry entry) throws IOException {
+      node.entries.add(entry);
+      if (node.entries.size() > 1 && Cbor.bytes(node).length > PAGE_BYTES) {
+        node.entries.remove(node.entries.size() - 1);
+        write();
+        node.entries.add(entry);
+      }
+    }
+
+    void flush() throws IOException {
+      if (!node.entries.isEmpty()) write();
+    }
+
+    void write() throws IOException {
+      ExternalSort.write(refs, new ExternalSort.Entry("", Cbor.bytes(writeNode(out, node, leaf))));
+      count++;
+      node = new Node();
     }
   }
 
@@ -238,7 +306,7 @@ public final class SpatialIndex {
     Path temp = Files.createTempDirectory("ilic-candidates-");
     ExternalSort sorted = new ExternalSort(temp, 4L * 1024 * 1024);
     try {
-      visit(c, info.root, box, sorted, 0);
+      visit(c, new FrameRef(info.root, info.rootLength), box, sorted, 0);
       final CloseableIterator<ExternalSort.Entry> it = sorted.finish();
       return new CloseableIterator<Location>() {
         public boolean hasNext() {
@@ -247,7 +315,7 @@ public final class SpatialIndex {
 
         public Location next() {
           try {
-            return Cbor.read(it.next().value, Location.class);
+            return Location.decode(it.next().value);
           } catch (IOException e) {
             throw new UncheckedIOException(e);
           }
@@ -270,29 +338,36 @@ public final class SpatialIndex {
   }
 
   private static void visit(
-      IliContainer c, long offset, BoundingBox box, ExternalSort sorted, int depth)
+      IliContainer c, FrameRef reference, BoundingBox box, ExternalSort sorted, int depth)
       throws IOException {
     if (depth > 64) throw new IOException("Spatial tree excessive depth");
-    Frames.Frame f = c.frameStore().read(offset);
+    reference.validate(c.size() - Frames.FOOTER_SIZE);
+    long offset = reference.offset;
+    Frames.Frame f = c.frameStore().read(reference);
     if (f.type != Frames.SPATIAL_LEAF && f.type != Frames.SPATIAL_BRANCH)
       throw new IOException("Invalid spatial node");
     Node n = Cbor.read(f.data, Node.class);
     for (Entry e : n.entries) {
       if (e.box == null) throw new IOException("Missing spatial bounds");
+      try {
+        new BoundingBox(e.box.minX, e.box.minY, e.box.maxX, e.box.maxY);
+      } catch (IllegalArgumentException invalid) {
+        throw new IOException("Invalid spatial bounds", invalid);
+      }
       if (!e.box.intersects(box)) continue;
       if (f.type == Frames.SPATIAL_LEAF) {
-        if (e.location == null || e.location.ordinal < 0)
+        if (e.location == null || Location.decode(e.location).ordinal < 0)
           throw new IOException("Invalid spatial location");
-        Location loc = e.location;
+        Location loc = Location.decode(e.location);
         sorted.add(
             FilesEx.number(loc.basketPosition)
                 + FilesEx.number(loc.chunkId)
                 + FilesEx.number(loc.ordinal),
-            Cbor.bytes(loc));
+            loc.bytes());
       } else {
         if (e.child < Frames.HEADER_SIZE || e.child >= offset)
           throw new IOException("Invalid/cyclic spatial pointer");
-        visit(c, e.child, box, sorted, depth + 1);
+        visit(c, new FrameRef(e.child, e.childLength), box, sorted, depth + 1);
       }
     }
   }
