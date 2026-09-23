@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, Mock
 from qgis.core import *
 from qgis.gui import QgsMapCanvas, QgsMessageBar
-from qgis.PyQt.QtWidgets import QMainWindow
+from qgis.PyQt.QtWidgets import QMainWindow, QTextBrowser
 from qgis.PyQt.QtCore import Qt, QPoint, QSettings
 from qgis.PyQt.QtTest import QTest
 from ibx_browser.client import manager
@@ -19,7 +19,8 @@ from ibx_browser.open_dialog import (
     MODEL_NAMES_SETTING,
     geometry_label,
 )
-from ibx_browser.plugin import Identify
+from ibx_browser.plugin import Identify, IbxPlugin
+from ibx_browser.activity import AccessMonitor, source_label
 
 app = QgsApplication([], True)
 app.initQgis()
@@ -43,10 +44,16 @@ class Iface:
         return self.bar
 
     def setActiveLayer(self, layer):
-        self.layer = layer
+        self.active_layer = layer
 
     def showAttributeTable(self, layer):
         self.table = layer
+
+    def activeLayer(self):
+        return getattr(self, "active_layer", None)
+
+    def setActiveLayer(self, layer):
+        self.active_layer = layer
 
 
 def wait_until(condition):
@@ -70,6 +77,13 @@ class GuiTests(unittest.TestCase):
         ]:
             with self.subTest(types=types):
                 self.assertEqual(expected, geometry_label(geometry, types))
+
+    def test_activity_source_label_hides_paths_and_url_parameters(self):
+        self.assertEqual("local.ibx", source_label("/private/user/data/local.ibx"))
+        label = source_label("https://user:secret@example.org/data/public.ibx?token=hidden")
+        self.assertEqual("example.org / public.ibx", label)
+        self.assertNotIn("secret", label)
+        self.assertNotIn("hidden", label)
 
     def test_user_journey(self):
         iface = Iface()
@@ -161,6 +175,105 @@ class GuiTests(unittest.TestCase):
         wait_until(lambda: browser.obj is not None and browser.tree.relations.complete)
         self.assertEqual("Haus am Park 1", browser.title.text())
         self.assertEqual(1, len(QgsProject.instance().mapLayers()))
+
+        # The diagnostics menu resolves the current object first and shows its dock
+        # before the asynchronous activity request returns.
+        monitor = AccessMonitor(iface.window)
+        iface.window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, monitor)
+        plugin = IbxPlugin(iface)
+        plugin.browser = browser
+        plugin.access_monitor = monitor
+        real_call = dataset.call
+
+        def delayed_activity(op, **args):
+            if op == "activity":
+                time.sleep(0.25)
+            return real_call(op, **args)
+
+        with patch.object(dataset, "call", side_effect=delayed_activity):
+            plugin.metrics()
+            self.assertTrue(monitor.isVisible())
+            self.assertIn("Datenquelle wird ermittelt", monitor.status.text())
+            wait_until(
+                lambda: monitor.dataset is dataset
+                and monitor._inflight_generation is None
+                and monitor.table.rowCount() > 0
+            )
+        activity_ops = {
+            monitor.table.item(row, 1).text().split(" · ", 1)[0]
+            for row in range(monitor.table.rowCount())
+        }
+        self.assertIn("Datei öffnen", activity_ops)
+        self.assertIn("Ein Objekt lesen", activity_ops)
+        self.assertIn("Seit dem Öffnen:", monitor.totals.text())
+        self.assertEqual(0, monitor.table.horizontalHeader().sortIndicatorSection())
+        self.assertEqual(
+            Qt.SortOrder.DescendingOrder,
+            monitor.table.horizontalHeader().sortIndicatorOrder(),
+        )
+        newest_sequence = max(
+            monitor.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            for row in range(monitor.table.rowCount())
+        )
+        self.assertEqual(
+            newest_sequence,
+            monitor.table.item(0, 0).data(Qt.ItemDataRole.UserRole),
+        )
+        time_sort_keys = [
+            monitor.table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
+            for row in range(monitor.table.rowCount())
+        ]
+        self.assertEqual(sorted(time_sort_keys, reverse=True), time_sort_keys)
+
+        monitor.info_button.click()
+        info_dialog = monitor._info_dialog
+        self.assertTrue(info_dialog.isVisible())
+        info_text = info_dialog.findChild(QTextBrowser, "ibxActivityInfoText").toPlainText()
+        self.assertIn("Cachetreffer", info_text)
+        self.assertIn("Indexseiten", info_text)
+        monitor.info_button.click()
+        self.assertIs(info_dialog, monitor._info_dialog)
+        info_dialog.close()
+
+        monitor.table.sortItems(1, Qt.SortOrder.AscendingOrder)
+        monitor.refresh_now()
+        wait_until(lambda: monitor._inflight_generation is None)
+        self.assertEqual(1, monitor.table.horizontalHeader().sortIndicatorSection())
+        self.assertEqual(
+            Qt.SortOrder.AscendingOrder,
+            monitor.table.horizontalHeader().sortIndicatorOrder(),
+        )
+        with self.assertRaises(Exception):
+            dataset.call("notAnOperation")
+        monitor.refresh_now()
+        wait_until(
+            lambda: any(
+                "notAnOperation" in monitor.table.item(row, 1).text()
+                and monitor.table.item(row, 2).text() == "Fehler"
+                and "Unknown protocol operation" in monitor.table.item(row, 5).text()
+                for row in range(monitor.table.rowCount())
+            )
+        )
+        failing_source = Mock(source=dataset.source)
+        failing_source.call.side_effect = RuntimeError("Testfehler")
+        monitor.open_dataset(failing_source)
+        wait_until(lambda: "Testfehler" in monitor.status.text())
+        monitor.open_dataset(dataset)
+        wait_until(lambda: monitor.table.rowCount() > 0)
+
+        # Without an explored object, the active layer and then a unique project
+        # source are both valid diagnostic contexts.
+        browser.dataset = None
+        iface.setActiveLayer(layer)
+        plugin._open_access_monitor()
+        self.assertIs(dataset, monitor.dataset)
+        iface.setActiveLayer(None)
+        plugin._open_access_monitor()
+        self.assertIs(dataset, monitor.dataset)
+        wait_until(lambda: monitor._inflight_generation is None and monitor.table.rowCount() > 0)
+        Path("build/qgis").mkdir(parents=True, exist_ok=True)
+        monitor.grab().save("build/qgis/activity-monitor.png")
+        monitor.hide()
         pixel = iface.canvas.getCoordinateTransform().transform(2600035, 1200035)
         QTest.mouseClick(
             iface.canvas.viewport(),
@@ -297,6 +410,12 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(8, loaded[cls + "Auftrag"].featureCount())
         self.assertEqual(24, loaded[cls + "Zustaendigkeit"].featureCount())
         dialog.close()
+        QgsProject.instance().clear()
+        browser.dataset = None
+        plugin._open_access_monitor()
+        self.assertIn("keine IBX-Datenquelle", monitor.status.text())
+        monitor.shutdown()
+        monitor.close()
         browser.abort()
         iface.window.close()
         QgsProject.instance().clear()

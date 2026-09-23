@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from qgis.core import (
     QgsApplication,
@@ -10,18 +9,16 @@ from qgis.core import (
     Qgis,
 )
 from qgis.gui import QgsMapToolIdentify
-from qgis.PyQt.QtCore import Qt, QSettings
+from qgis.PyQt.QtCore import Qt, QSettings, QTimer
 from qgis.PyQt.QtGui import QAction
 from qgis.PyQt.QtWidgets import (
     QInputDialog,
-    QMessageBox,
     QDialog,
     QVBoxLayout,
     QFormLayout,
     QLineEdit,
     QDialogButtonBox,
     QLabel,
-    QPlainTextEdit,
 )
 from .provider import Metadata
 from .client import manager
@@ -29,6 +26,7 @@ from .browser import ObjectBrowser
 from .layers import Layers
 from .open_dialog import OpenDialog
 from .tasks import submit
+from .activity import AccessMonitor, source_label
 
 
 class Identify(QgsMapToolIdentify):
@@ -136,6 +134,9 @@ class IbxPlugin:
         except Exception as e:
             self.iface.messageBar().pushWarning("IBX", str(e))
         self.layers = Layers(self.iface)
+        self.access_monitor = AccessMonitor(self.iface.mainWindow())
+        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.access_monitor)
+        self.access_monitor.hide()
         self.browser = ObjectBrowser(self.iface, self.layers)
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.browser)
         self.browser.hide()
@@ -191,33 +192,69 @@ class IbxPlugin:
         self.browser.open(layer.dataProvider().dataset, fid=ids[0])
 
     def metrics(self):
-        d = self.browser.dataset
-        if d is None:
-            self.iface.messageBar().pushInfo("IBX", "Zuerst ein Objekt öffnen.")
+        self.access_monitor.show_message("IBX-Datenquelle wird ermittelt …")
+        QTimer.singleShot(0, self._open_access_monitor)
+
+    def _open_access_monitor(self):
+        dataset = self.browser.dataset
+        if dataset is not None:
+            self.access_monitor.open_dataset(dataset)
             return
 
-        def show(data):
-            dialog = QDialog(self.iface.mainWindow())
-            dialog.setWindowTitle("IBX-Zugriffsdiagnose")
-            dialog.resize(580, 400)
-            layout = QVBoxLayout(dialog)
-            layout.addWidget(
-                QLabel(
-                    "Kumuliert seit dem Öffnen, inklusive Öffnungskosten. Cachetreffer sind separat ausgewiesen."
-                )
-            )
-            text = QPlainTextEdit(json.dumps(data, indent=2))
-            text.setReadOnly(True)
-            layout.addWidget(text)
-            self.dialogs.append(dialog)
-            dialog.show()
+        active = self.iface.activeLayer()
+        if active is not None and active.providerType() == "ibx":
+            self.access_monitor.open_dataset(active.dataProvider().dataset)
+            return
 
-        submit(
-            "IBX-Zugriffe lesen",
-            lambda _: d.call("metrics"),
-            show,
-            lambda e: self.iface.messageBar().pushWarning("IBX", e),
+        available = []
+        seen = set()
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.providerType() != "ibx":
+                continue
+            candidate = layer.dataProvider().dataset
+            key = id(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            available.append((candidate, layer.name()))
+
+        if not available:
+            self.access_monitor.show_message(
+                "Es ist keine IBX-Datenquelle geladen. Öffne zuerst eine IBX-Datei "
+                "oder füge einen IBX-Layer zum Projekt hinzu."
+            )
+            return
+        if len(available) == 1:
+            self.access_monitor.open_dataset(available[0][0])
+            return
+
+        counts = {}
+        for candidate, _ in available:
+            label = source_label(candidate.source)
+            counts[label] = counts.get(label, 0) + 1
+        choices = []
+        for index, (candidate, layer_name) in enumerate(available, 1):
+            label = source_label(candidate.source)
+            if counts[label] > 1:
+                label = f"{label} · {layer_name}"
+            label = label or f"IBX-Quelle {index}"
+            if label in choices:
+                label = f"{label} · Quelle {index}"
+            choices.append(label)
+        selected, ok = QInputDialog.getItem(
+            self.iface.mainWindow(),
+            "Zugriffsdiagnose",
+            "Für welche IBX-Datenquelle soll der Verlauf angezeigt werden?",
+            choices,
+            0,
+            False,
         )
+        if not ok:
+            self.access_monitor.show_message(
+                "Quellauswahl abgebrochen. Wähle einen IBX-Layer und öffne die Diagnose erneut."
+            )
+            return
+        self.access_monitor.open_dataset(available[choices.index(selected)][0])
 
     def settings(self):
         settings = QSettings()
@@ -251,8 +288,11 @@ class IbxPlugin:
         if self.identify.task:
             self.identify.task.cancel()
         self.browser.abort()
+        self.access_monitor.shutdown()
         self.iface.removeDockWidget(self.browser)
         self.browser.deleteLater()
+        self.iface.removeDockWidget(self.access_monitor)
+        self.access_monitor.deleteLater()
         if self.iface.mapCanvas().mapTool() == self.identify:
             self.iface.mapCanvas().unsetMapTool(self.identify)
         for action in self.actions:

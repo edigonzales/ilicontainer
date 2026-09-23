@@ -21,7 +21,7 @@ Der Objektbrowser zeigt eingebettete Strukturen und navigiert in beide Beziehung
 python3 scripts/package-qgis.py
 ```
 
-Das Paket liegt unter `build/ibx-qgis-0.4.0.zip`; Java 21 ist erforderlich.
+Das Paket liegt unter `build/ibx-qgis-0.4.2.zip`; Java 21 ist erforderlich.
 
 ## Build und Tests
 

@@ -16,7 +16,7 @@ python3 scripts/package-qgis.py
 ```
 
 In QGIS unter **Erweiterungen → Erweiterungen verwalten → Aus ZIP installieren**
-`build/ibx-qgis-0.4.0.zip` auswählen. Das ZIP enthält Plugin, Bridge-Abhängigkeiten,
+`build/ibx-qgis-0.4.2.zip` auswählen. Das ZIP enthält Plugin, Bridge-Abhängigkeiten,
 Demodatei, Modell und XTF; keine Java-Laufzeit. QGIS anschliessend neu starten.
 Unter **IBX → Einstellungen** kann die Java-Ausführungsdatei angegeben werden,
 z.B. `/Users/name/.sdkman/candidates/java/21.0.10-tem/bin/java`.
@@ -91,8 +91,18 @@ ist nur für tatsächlich unveränderliche URLs ohne starken ETag vorgesehen.
 HTTPS→HTTP-Weiterleitungen werden abgelehnt. Es gibt keine Authentisierung und
 keine automatische Navigation in andere Dateien.
 
-Unter **IBX → Zugriffsdiagnose** stehen kumulierte Bytes, HTTP-Anfragen,
-Daten-Chunks, Indexseiten und Cachetreffer inklusive Öffnungskosten.
+**IBX → Zugriffsdiagnose** öffnet ein andockbares Fenster für die Datenquelle des
+aktuell erkundeten Objekts oder des aktiven IBX-Layers. Ist kein Layer aktiv,
+wird die einzige IBX-Quelle im Projekt gewählt; bei mehreren erscheint eine
+Auswahl. Das Fenster zeigt den letzten Verlauf von bis zu 200 Bridge-Vorgängen,
+einschliesslich laufender, wartender, erfolgreicher und fehlgeschlagener Zugriffe.
+Neueste Vorgänge stehen standardmässig oben; jede Spalte lässt sich über ihren
+Titel sortieren. **Info** erklärt die Spalten und Messwerte. Das Fenster
+aktualisiert sich etwa jede Sekunde, solange es sichtbar ist. Die Summen seit
+dem Öffnen enthalten auch Datei- und HTTP-Lesezugriffe, Daten-Chunkframes,
+Indexseiten und Cachetreffer. Das Protokoll bleibt im Arbeitsspeicher und wird
+nicht dauerhaft gespeichert. Angezeigt werden nur Dateiname oder Hostname, keine
+lokalen Vollpfade oder URL-Parameter.
 
 ## Erstellen eigener Dateien
 

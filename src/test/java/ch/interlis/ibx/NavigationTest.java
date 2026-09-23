@@ -12,6 +12,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
@@ -186,6 +187,12 @@ public class NavigationTest {
       denied.disconnect();
       JsonNode opened = call(bridge, Navigation.map("op", "open", "source", file.toString()));
       String session = opened.get("session").asText();
+      JsonNode initialActivity =
+          call(bridge, Navigation.map("op", "activity", "session", session));
+      assertEquals(1, initialActivity.get("events").size());
+      assertEquals("open", initialActivity.get("events").get(0).get("op").asText());
+      assertEquals("success", initialActivity.get("events").get(0).get("state").asText());
+      assertTrue(initialActivity.get("totals").get("bytesRead").asLong() > 0);
       JsonNode page =
           call(
               bridge,
@@ -200,6 +207,48 @@ public class NavigationTest {
                   "Grundriss",
                   "limit",
                   5));
+      JsonNode firstActivity = call(bridge, Navigation.map("op", "activity", "session", session));
+      assertEquals(2, firstActivity.get("events").size());
+      assertEquals("query", firstActivity.get("events").get(1).get("op").asText());
+      assertEquals("success", firstActivity.get("events").get(1).get("state").asText());
+      assertEquals(5, firstActivity.get("events").get(1).get("resultCount").asInt());
+      assertEquals(
+          call(bridge, Navigation.map("op", "metrics", "session", session))
+              .get("bytesRead")
+              .asLong(),
+          firstActivity.get("totals").get("bytesRead").asLong());
+      assertEquals(
+          2,
+          call(bridge, Navigation.map("op", "activity", "session", session))
+              .get("events")
+              .size()); // Polling is deliberately absent from its own activity history.
+
+      // The activity endpoint must remain responsive while regular session access is locked.
+      java.lang.reflect.Field sessionsField = BridgeMain.class.getDeclaredField("sessions");
+      sessionsField.setAccessible(true);
+      Object sessionState = ((Map<?, ?>) sessionsField.get(bridge)).get(session);
+      ExecutorService poller = Executors.newSingleThreadExecutor();
+      try {
+        synchronized (sessionState) {
+          Future<JsonNode> snapshot =
+              poller.submit(
+                  () -> call(bridge, Navigation.map("op", "activity", "session", session)));
+          assertEquals(2, snapshot.get(2, TimeUnit.SECONDS).get("events").size());
+        }
+      } finally {
+        poller.shutdownNow();
+      }
+      assertEquals(
+          400,
+          callAllowFailure(
+                  bridge,
+                  Navigation.map("op", "notAnOperation", "session", session))
+              .get("status"));
+      JsonNode afterFailure = call(bridge, Navigation.map("op", "activity", "session", session));
+      assertEquals("failed", afterFailure.get("events").get(2).get("state").asText());
+      assertEquals(
+          "Unknown protocol operation",
+          afterFailure.get("events").get(2).get("error").asText());
       Set<Long> fids = new TreeSet<Long>();
       while (true) {
         for (JsonNode item : page.get("items")) {
@@ -242,6 +291,15 @@ public class NavigationTest {
       assertTrue(text.contains("Grundriss"));
       assertTrue(text.contains("Beschriftung"));
       assertArrayEquals(before, Files.readAllBytes(file));
+      for (int i = 0; i < 205; i++)
+        call(bridge, Navigation.map("op", "describe", "session", session));
+      JsonNode bounded = call(bridge, Navigation.map("op", "activity", "session", session));
+      assertEquals(200, bounded.get("events").size());
+      assertEquals(
+          call(bridge, Navigation.map("op", "metrics", "session", session))
+              .get("bytesRead")
+              .asLong(),
+          bounded.get("totals").get("bytesRead").asLong());
       call(bridge, Navigation.map("op", "close", "session", session));
     }
   }
@@ -260,6 +318,29 @@ public class NavigationTest {
       assertEquals(200, c.getResponseCode());
       try (InputStream in = c.getInputStream()) {
         return json.readTree(in);
+      }
+    } finally {
+      c.disconnect();
+    }
+  }
+
+  private Map<String, Object> callAllowFailure(BridgeMain bridge, Map<String, Object> q)
+      throws Exception {
+    ObjectMapper json = new ObjectMapper();
+    HttpURLConnection c =
+        (HttpURLConnection)
+            new URL("http://127.0.0.1:" + bridge.port() + "/v1").openConnection();
+    c.setRequestMethod("POST");
+    c.setDoOutput(true);
+    c.setRequestProperty("X-IBX-Token", bridge.token());
+    try {
+      try (OutputStream out = c.getOutputStream()) {
+        out.write(json.writeValueAsBytes(q));
+      }
+      int status = c.getResponseCode();
+      InputStream stream = status >= 400 ? c.getErrorStream() : c.getInputStream();
+      try (InputStream in = stream) {
+        return Navigation.map("status", status, "body", json.readTree(in));
       }
     } finally {
       c.disconnect();

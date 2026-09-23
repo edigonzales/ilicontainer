@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[1]
 archive_path = (
     Path(sys.argv[1]).resolve()
     if len(sys.argv) > 1
-    else root / "build/ibx-qgis-0.4.0.zip"
+    else root / "build/ibx-qgis-0.4.2.zip"
 )
 with tempfile.TemporaryDirectory(prefix="ibx-package-") as temp:
     with zipfile.ZipFile(archive_path) as archive:
