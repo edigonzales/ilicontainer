@@ -1,8 +1,10 @@
 # IBX in QGIS 4.2.2
 
-Lesender Prototyp für macOS / Qt 6. Der Python-Provider greift direkt über die
-Java-Bridge auf `.ibx` zu. Es wird weder in GeoPackage importiert noch ein
-vollständiger Memory-Layer angelegt. Java 21 oder neuer muss installiert sein.
+Lesender Prototyp für macOS, Linux und Windows / Qt 6. Der Python-Provider liest
+`.ibx` direkt in QGIS; es gibt keine Java-Bridge, keinen Hilfsprozess und keine
+Java-Abhängigkeit. Es wird weder in GeoPackage importiert noch ein vollständiger
+Memory-Layer angelegt. Zstd-komprimierte Chunks verwendet der Reader über die
+von QGIS mitgelieferte Zstandard-Bibliothek.
 
 Die tatsächlich ausgeführten Prüfungen und Zugriffsmessungen stehen im
 [Abnahmeprotokoll](QGIS-ACCEPTANCE.md).
@@ -10,17 +12,15 @@ Die tatsächlich ausgeführten Prüfungen und Zugriffsmessungen stehen im
 ## Schnellstart
 
 ```sh
-export JAVA_HOME="$HOME/.sdkman/candidates/java/21.0.10-tem"
 ./scripts/build-demo.sh
 python3 scripts/package-qgis.py
 ```
 
 In QGIS unter **Erweiterungen → Erweiterungen verwalten → Aus ZIP installieren**
-`build/ibx-qgis-0.4.3.zip` auswählen. Das ZIP enthält Plugin, Bridge-Abhängigkeiten,
-Demodatei, Modell und XTF; keine Java-Laufzeit. QGIS anschliessend neu starten.
-Unter **IBX → Einstellungen** kann die Java-Ausführungsdatei angegeben werden,
-z.B. `/Users/name/.sdkman/candidates/java/21.0.10-tem/bin/java`.
-Das Bridge-Verzeichnis bleibt beim ZIP-Paket leer (automatische Erkennung).
+`build/ibx-qgis-0.5.0.zip` auswählen. Das ZIP ist plattformunabhängig und enthält
+nur Python, die Demodateien, Modelle und XTF. QGIS anschliessend neu starten.
+Unter **IBX → Einstellungen** kann bei Bedarf der Pfad zur
+Zstandard-Bibliothek angegeben werden; leer bedeutet automatische Erkennung.
 
 **IBX → Demo öffnen** öffnet die Auswahl der mitgelieferten Beispiele. **Parkanlage**
 ist der empfohlene Einstieg: **Spielplatz / Fläche** oder **Spielgerät / Position**
@@ -52,8 +52,10 @@ Mit **IBX-Objekt erkunden** ein Gebäude anklicken. Im Objektfenster:
 3. Unter **Arbeit · Betroffene Objekte** einen Spielplatz aufklappen oder öffnen.
 4. „Auf Karte zeigen“ lädt bei Bedarf den passenden Layer und hebt das Objekt hervor.
 5. Mit „Zurück“ zum Auftrag und Gebäude zurückkehren.
-6. „Originalobjekte exportieren“ exportiert das aktuelle Objekt und markierte
-   Objekte derselben Quelle, dedupliziert über ihre FID, als XTF-Fragment.
+
+Originalobjekte lassen sich weiterhin mit der Java-Kommandozeile als
+XTF-Fragment exportieren (`ibx get-object`, `ibx get-class`, …); das
+Python-Plugin selbst schreibt keine Dateien.
 
 Die Spalten **Eigenschaft · Inhalt · Aktion** trennen Angaben von Bedienung.
 Ein Klick auf den Inhalt markiert nur die Zeile. Der Baumpfeil lädt das Ziel erst
@@ -75,7 +77,7 @@ Beziehungen. **Weitere Einträge laden** holt jeweils höchstens 50 Indexeinträ
 werden ausdrücklich angezeigt. Fehler lassen sich an der betroffenen Zeile
 wiederholen. Ein bereits übergeordnetes Objekt erscheint als **Bereits weiter
 oben angezeigt**; die Aktion springt zu dieser Darstellung. Aufklappen verändert
-den Besuchsverlauf nicht. Karte, Tabelle und Export unten beziehen sich auf das
+den Besuchsverlauf nicht. Karte und Tabelle unten beziehen sich auf das
 Hauptobjekt. **Technische Details** stehen als normaler, aufklappbarer Knoten am
 Ende des Objektbaums und lassen sich wie andere Baumzeilen kopieren.
 
@@ -96,8 +98,9 @@ können daher auch ein Objekt ausserhalb des sichtbaren Layerfilters zeigen.
 
 Im Öffnungsdialog eine öffentliche `https://…/datei.ibx`-Adresse eingeben.
 Erforderlich sind Byte-Range-Antworten und ein starker ETag. TLS-Zertifikate werden
-normal durch Java geprüft. Der Server darf keine komprimierte HTTP-Antwort
-liefern; die interne IBX-Kompression ist davon unabhängig.
+über den Zertifikatsspeicher der Python-Laufzeit geprüft (`SSL_CERT_FILE`
+funktioniert als zusätzlicher Vertrauensanker). Der Server darf keine komprimierte
+HTTP-Antwort liefern; die interne IBX-Kompression ist davon unabhängig.
 
 Ohne Ranges kann bewusst „Vollständigen Download erlauben“ aktiviert werden.
 Dann wird eine temporäre lokale Momentaufnahme verwendet. „URL ist unveränderlich“
@@ -108,7 +111,7 @@ keine automatische Navigation in andere Dateien.
 **IBX → Zugriffsdiagnose** öffnet ein andockbares Fenster für die Datenquelle des
 aktuell erkundeten Objekts oder des aktiven IBX-Layers. Ist kein Layer aktiv,
 wird die einzige IBX-Quelle im Projekt gewählt; bei mehreren erscheint eine
-Auswahl. Das Fenster zeigt den letzten Verlauf von bis zu 200 Bridge-Vorgängen,
+Auswahl. Das Fenster zeigt den letzten Verlauf von bis zu 200 Vorgängen,
 einschliesslich laufender, wartender, erfolgreicher und fehlgeschlagener Zugriffe.
 Neueste Vorgänge stehen standardmässig oben; jede Spalte lässt sich über ihren
 Titel sortieren. **Info** erklärt die Spalten und Messwerte. Das Fenster
@@ -162,6 +165,7 @@ Lastdaten bleiben unter `build/`; ein normaler Build verändert kein QGIS-Profil
 
 ```sh
 ./gradlew test build installDist
+PYTHONPATH=qgis python3 qgis/tests/test_reader.py -v   # ohne QGIS und Java
 scripts/qgis-python.sh qgis/tests/test_provider.py -v
 scripts/qgis-python.sh qgis/tests/test_ui.py -v
 scripts/qgis-python.sh qgis/tests/test_presentation.py -v
@@ -173,22 +177,31 @@ python3 scripts/verify-large.py --size 1000000  # optional
 ```
 
 `QGIS_APP` kann den lokalen App-Pfad überschreiben. Die QGIS-Tests laufen mit den
-Python-/Qt-Bindings der App. `test_ui.py` prüft den asynchronen Bedienablauf und
-schreibt Prüfbilder nach `build/qgis/`. Der Lasttest schreibt Zugriffszahlen nach
-`build/large/report.json`; die grossen Dateien werden nicht versioniert.
+Python-/Qt-Bindings der App. `test_reader.py` prüft den Container-Leser direkt und
+benötigt weder QGIS noch Java; Zstd-Fälle werden übersprungen, wenn keine
+Zstandard-Bibliothek gefunden wird. Die Fixtures unter `qgis/tests/fixtures/`
+enthalten je eine `deflate`- und eine unkomprimierte Datei. `test_ui.py` prüft den
+asynchronen Bedienablauf und schreibt Prüfbilder nach `build/qgis/`. Der Lasttest
+erzeugt die Datei mit der Java-CLI, misst aber ausschliesslich mit dem
+Python-Leser und schreibt Zugriffszahlen nach `build/large/report.json`.
 
 ## Grenzen
 
 - Format 4 mit neuer IBX-Magic; alte IliContainer-Dateien aus XTF neu erstellen.
-- Keine Schreiboperationen und kein GDAL-Dateitreiber.
+- Keine Schreiboperationen und kein GDAL-Dateitreiber. Der XTF-Export bleibt der
+  Java-Kommandozeile vorbehalten.
+- Zstd-komprimierte Dateien benötigen eine auffindbare Zstandard-Bibliothek
+  (QGIS liefert sie normalerweise mit); `deflate`- und unkomprimierte Dateien
+  laufen ohne sie.
 - Dezimalwerte und ganze Zahlen ausserhalb des modellseitig zugesicherten
   64-Bit-Bereichs erscheinen exakt als Text; 64-Bit-Ganzzahlen und Boolesche Werte
   sind native Felder. Strukturfelder sind zusätzlich als typisiertes JSON abfragbar.
 - Strukturgeometrien lassen sich hervorheben, bilden aber keine eigenen Layer.
-- Ein Fragment ist möglicherweise nicht modellkonform. Referenzierte Ziele werden
-  nicht automatisch exportiert. Der normale QGIS-Layerexport exportiert nur die
-  jeweilige GIS-Sicht.
-- Räumliche Indexauswertung verwendet die bestehende externe Kandidatensortierung;
-  eine sehr grosse Abfrage kann vor der ersten Seite Arbeit benötigen.
+- Vollständige Klassenabfragen über sehr viele Objekte sind in Python langsamer
+  als mit der früheren Java-Bridge; gezielte Karten- und Objektzugriffe sind
+  gleichwertig oder schneller. Messwerte stehen im Abnahmeprotokoll.
+- Räumliche Indexauswertung sammelt Kandidaten im Arbeitsspeicher; eine sehr
+  grosse Abfrage kann vor der ersten Seite Arbeit benötigen. Die Kandidatenreihenfolge
+  entspricht der Container-Reihenfolge der früheren Java-Umsetzung.
 - Netzwerkfehler werden begrenzt durch Verbindungs-/Lesetimeouts. Abbruch wird
   zwischen Leseoperationen geprüft; ein laufender Socket kann bis zum Timeout benötigen.

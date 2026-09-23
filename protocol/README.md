@@ -1,5 +1,10 @@
 # IBX bridge protocol v1
 
+> The QGIS plugin no longer uses this protocol. It reads containers in-process
+> with the pure-Python reader (`qgis/ibx_browser/ibx/`). The Java bridge and its
+> protocol remain in the repository for the Java API, the CLI tests and the
+> `NavigationTest` acceptance.
+
 Private POST `/v1` on loopback. Every request requires `X-IBX-Token`; the token and
 random port are printed once as a JSON startup record by `BridgeMain`. They must
 never be stored in QGIS projects. stdin EOF shuts the process down. Request bodies

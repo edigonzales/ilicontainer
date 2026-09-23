@@ -288,14 +288,14 @@ class IbxPlugin:
         dialog.setWindowTitle("IBX-Einstellungen")
         layout = QVBoxLayout(dialog)
         form = QFormLayout()
-        java = QLineEdit(settings.value("ibx/java", ""))
-        libs = QLineEdit(settings.value("ibx/bridgeLib", ""))
-        form.addRow("Java-21-Programm", java)
-        form.addRow("Bridge-Verzeichnis (lib)", libs)
+        library = QLineEdit(settings.value("ibx/zstdLib", ""))
+        form.addRow("Zstandard-Bibliothek", library)
         layout.addLayout(form)
         layout.addWidget(
             QLabel(
-                "Leere Felder verwenden automatische Erkennung. Änderungen gelten nach QGIS-Neustart."
+                "Leer lassen für automatische Erkennung. Die Bibliothek ist nur "
+                "für zstd-komprimierte Dateien nötig; QGIS liefert sie normalerweise "
+                "mit. Änderungen gelten nach QGIS-Neustart."
             )
         )
         buttons = QDialogButtonBox(
@@ -306,8 +306,7 @@ class IbxPlugin:
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         if dialog.exec():
-            settings.setValue("ibx/java", java.text())
-            settings.setValue("ibx/bridgeLib", libs.text())
+            settings.setValue("ibx/zstdLib", library.text())
 
     def unload(self):
         self.identify.generation += 1

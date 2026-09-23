@@ -511,8 +511,7 @@ class GuiTests(unittest.TestCase):
         browser.abort()
         iface.window.close()
         QgsProject.instance().clear()
-        manager.process.closeWriteChannel()
-        manager.process.waitForFinished(3000)
+        manager.close()
 
 
 if __name__ == "__main__":

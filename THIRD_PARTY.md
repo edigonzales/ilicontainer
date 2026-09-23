@@ -1,5 +1,11 @@
 # Third-party source attribution
 
+The QGIS plugin ships no third-party source or binaries.  Its pure-Python
+container reader (`qgis/ibx_browser/ibx/`) was written for this repository.
+For zstd-compressed chunks it binds the Zstandard library that QGIS itself
+ships (GDAL and Qt depend on it) at runtime via ``ctypes``; that library is
+not redistributed.  Files using ``deflate`` or ``none`` need no native library.
+
 The ISO-WKB curve codec and its regression fixtures adapt the SQL/MM type dispatch,
 component encoding and control-point preservation from
 `edigonzales/hop-geometry-type-plugin`, commit

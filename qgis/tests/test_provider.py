@@ -28,8 +28,7 @@ class ProviderTests(unittest.TestCase):
             hashlib.sha256(Path(cls.dataset.source).read_bytes()).hexdigest()
             == cls.hash
         )
-        manager.process.closeWriteChannel()
-        manager.process.waitForFinished(3000)
+        manager.close()
 
     def layer(self, geometry="Grundriss", cls="Gebaeude"):
         d = self.dataset
@@ -124,8 +123,9 @@ class ProviderTests(unittest.TestCase):
             path = str(Path(tmp) / "test.qgs")
             self.assertTrue(QgsProject.instance().write(path))
             text = Path(path).read_text()
-            self.assertNotIn(manager.rpc.token, text)
-            self.assertNotIn(str(manager.rpc.url), text)
+            self.assertIn(self.dataset.state, text)
+            self.assertNotIn("X-IBX-Token", text)
+            self.assertNotIn("127.0.0.1", text)
             QgsProject.instance().clear()
             self.assertTrue(QgsProject.instance().read(path))
             restored = list(QgsProject.instance().mapLayers().values())[0]

@@ -1,4 +1,4 @@
-"""Live, bounded read-activity view for an IBX bridge session."""
+"""Live, bounded read-activity view for one IBX session."""
 
 from datetime import datetime
 from pathlib import Path
@@ -66,7 +66,7 @@ class _SortableItem(QTableWidgetItem):
 
 
 class AccessMonitor(QDockWidget):
-    """Docked view that polls a bridge session only while the dock is visible."""
+    """Docked view that polls the active dataset only while the dock is visible."""
 
     def __init__(self, parent=None):
         super().__init__("IBX · Zugriffsdiagnose", parent)
@@ -111,7 +111,7 @@ class AccessMonitor(QDockWidget):
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header_tooltips = [
-            "Startzeit des Bridge-Vorgangs. Neueste Vorgänge stehen standardmässig oben.",
+            "Startzeit des Vorgangs. Neueste Vorgänge stehen standardmässig oben.",
             "Art des Lesezugriffs; optionale technische Details stehen nach dem Punkt.",
             "Wartet, läuft, ist fertig, fehlgeschlagen oder wurde abgebrochen.",
             "Dauer des Vorgangs einschliesslich Wartezeit auf die Lesesitzung.",
@@ -356,7 +356,7 @@ def _operation_label(op):
         "next": "Nächste Ergebnisseite lesen",
         "object": "Ein Objekt lesen",
         "related": "Beziehungen nachschlagen",
-        "export": "Originalobjekte exportieren",
+        "export": "Export (nur Java-CLI)",
         "closeCursor": "Abfrage schliessen",
     }.get(op, op or "IBX-Vorgang")
 
@@ -402,7 +402,7 @@ def _info_html():
       <dd>Startzeit des Vorgangs. Neue Vorgänge erscheinen standardmässig oben.
       Durch Klick auf einen Spaltentitel können Sie nach dieser Spalte sortieren.</dd>
       <dt><b>Vorgang</b></dt>
-      <dd>Welche Aufgabe die Bridge erledigt hat, zum Beispiel ein Objekt lesen,
+      <dd>Welche Aufgabe IBX erledigt hat, zum Beispiel ein Objekt lesen,
       Kartenobjekte abfragen oder Beziehungen nachschlagen. Ergänzende Angaben
       wie Klasse oder FID sind technische Suchhinweise.</dd>
       <dt><b>Status</b></dt>
@@ -430,7 +430,7 @@ def _info_html():
     dagegen nur die letzten 200 Vorgänge im Arbeitsspeicher. Er wird nicht auf
     Disk gespeichert; die Summen können daher grösser sein als die Summe der
     sichtbaren Zeilen.</p>
-    <p>Bytes, Chunks und Indexseiten werden je Bridge-Vorgang zusammengefasst.
+    <p>Bytes, Chunks und Indexseiten werden je Vorgang zusammengefasst.
     Die Tabelle listet nicht jeden einzelnen Dateibereich auf. HTTP-Range-Anfragen
     gibt es nur bei Quellen, die über HTTP(S) gelesen werden.</p>
     """

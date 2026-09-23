@@ -6,7 +6,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
-    QFileDialog,
     QToolButton,
     QListWidget,
     QListWidgetItem,
@@ -83,9 +82,7 @@ class ObjectBrowser(QDockWidget):
         self.map_button.clicked.connect(self.show_map)
         self.table_button = QPushButton("Attributtabelle")
         self.table_button.clicked.connect(self.show_table)
-        self.export_button = QPushButton("Originalobjekte exportieren …")
-        self.export_button.clicked.connect(self.export)
-        for w in [self.map_button, self.table_button, self.export_button]:
+        for w in [self.map_button, self.table_button]:
             actions.addWidget(w)
         layout.addLayout(actions)
         self.setWidget(root)
@@ -106,7 +103,6 @@ class ObjectBrowser(QDockWidget):
             )
         )
         self.table_button.setEnabled(self.obj is not None)
-        self.export_button.setEnabled(self.obj is not None)
 
     def abort(self):
         self.generation += 1
@@ -214,41 +210,3 @@ class ObjectBrowser(QDockWidget):
             self.iface.showAttributeTable(
                 self.layers.ensure(self.dataset, self.obj["className"])
             )
-
-    def export(self):
-        if not self.obj:
-            return
-        fids = {self.obj["fid"]}
-        from qgis.core import QgsProject
-
-        for layer in QgsProject.instance().mapLayers().values():
-            if (
-                layer.providerType() == "ibx"
-                and layer.dataProvider().dataset is self.dataset
-            ):
-                fids.update(layer.selectedFeatureIds())
-        target, _ = QFileDialog.getSaveFileName(
-            self,
-            "Originalobjekte als INTERLIS-Fragment exportieren",
-            "",
-            "INTERLIS (*.xtf)",
-        )
-        if not target:
-            return
-        if not target.lower().endswith(".xtf"):
-            target += ".xtf"
-        d = self.dataset
-        self.status.setText(
-            f"{len(fids)} vollständige Objekte werden exportiert. Referenzierte Ziele werden nicht automatisch ergänzt."
-        )
-        self.task = submit(
-            "IBX-Originalobjekte exportieren",
-            lambda rid: d.call(
-                "export", fids=sorted(fids), target=target, requestId=rid
-            ),
-            lambda result: self.status.setText(
-                f"{result['count']} Originalobjekte exportiert. Das XTF ist ein Fragment; Referenzziele können fehlen."
-            ),
-            self.error,
-            d.rpc,
-        )

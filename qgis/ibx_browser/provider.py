@@ -223,7 +223,7 @@ class Iterator(QgsAbstractFeatureIterator):
             try:
                 self.source.dataset.call("closeCursor", cursor=self.cursor)
             except Exception:
-                pass  # The bridge also expires abandoned cursors.
+                pass  # The dataset also expires abandoned cursors.
         self.cursor = None
         self.done = True
         return True

@@ -1,4 +1,9 @@
-"""End-to-end HTTPS source through the real QGIS provider and Java bridge."""
+"""End-to-end HTTPS source through the real QGIS provider.
+
+The reader itself performs the Range requests; a local TLS server with a
+self-signed certificate verifies ETag pinning and byte ranges without any
+Java runtime.
+"""
 
 import hashlib
 import http.server
@@ -27,51 +32,26 @@ class HttpsProviderTests(unittest.TestCase):
     def test_https_range_provider(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            store = directory / "test.p12"
-            pem = directory / "test.pem"
-            java = Path(
-                os.environ.get(
-                    "JAVA_HOME",
-                    str(Path.home() / ".sdkman/candidates/java/21.0.10-tem"),
-                )
-            )
-            subprocess.run(
-                [
-                    str(java / "bin/keytool"),
-                    "-genkeypair",
-                    "-alias",
-                    "test",
-                    "-keyalg",
-                    "RSA",
-                    "-storetype",
-                    "PKCS12",
-                    "-keystore",
-                    str(store),
-                    "-storepass",
-                    "changeit",
-                    "-keypass",
-                    "changeit",
-                    "-dname",
-                    "CN=localhost",
-                    "-ext",
-                    "SAN=dns:localhost,ip:127.0.0.1",
-                    "-validity",
-                    "1",
-                ],
-                check=True,
-                capture_output=True,
-            )
+            key = directory / "key.pem"
+            certificate = directory / "cert.pem"
             subprocess.run(
                 [
                     "openssl",
-                    "pkcs12",
-                    "-in",
-                    str(store),
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-keyout",
+                    str(key),
                     "-out",
-                    str(pem),
+                    str(certificate),
+                    "-days",
+                    "1",
                     "-nodes",
-                    "-passin",
-                    "pass:changeit",
+                    "-subj",
+                    "/CN=localhost",
+                    "-addext",
+                    "subjectAltName=DNS:localhost,IP:127.0.0.1",
                 ],
                 check=True,
                 capture_output=True,
@@ -100,14 +80,12 @@ class HttpsProviderTests(unittest.TestCase):
 
             server = http.server.ThreadingHTTPServer(("localhost", 0), Handler)
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            context.load_cert_chain(pem)
+            context.load_cert_chain(certificate, key)
             server.socket = context.wrap_socket(server.socket, server_side=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
-            previous = os.environ.get("JAVA_TOOL_OPTIONS")
-            os.environ["JAVA_TOOL_OPTIONS"] = (
-                f"-Djavax.net.ssl.trustStore={store} -Djavax.net.ssl.trustStorePassword=changeit"
-            )
+            previous = os.environ.get("SSL_CERT_FILE")
+            os.environ["SSL_CERT_FILE"] = str(certificate)
             try:
                 manager.start()
                 source = f"https://localhost:{server.server_port}/quartier.ibx"
@@ -140,16 +118,14 @@ class HttpsProviderTests(unittest.TestCase):
                 )
                 del layer
             finally:
-                if manager.process:
-                    manager.process.closeWriteChannel()
-                    manager.process.waitForFinished(3000)
+                manager.close()
                 server.shutdown()
                 server.server_close()
                 thread.join()
                 if previous is None:
-                    os.environ.pop("JAVA_TOOL_OPTIONS", None)
+                    os.environ.pop("SSL_CERT_FILE", None)
                 else:
-                    os.environ["JAVA_TOOL_OPTIONS"] = previous
+                    os.environ["SSL_CERT_FILE"] = previous
 
 
 if __name__ == "__main__":

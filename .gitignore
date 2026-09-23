@@ -6,5 +6,6 @@ benchmark-data/
 .DS_Store
 
 !demo/*.ibx
+!qgis/tests/fixtures/*.ibx
 __pycache__/
 *.pyc

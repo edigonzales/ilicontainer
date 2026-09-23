@@ -14,25 +14,32 @@ Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren
 
 Der lesende Python-Provider für QGIS 4.2.2 öffnet lokale und öffentliche HTTPS-Dateien.
 Der Objektbrowser zeigt eingebettete Strukturen und navigiert in beide Beziehungsrichtungen.
-[Installation und Demo](docs/QGIS.md) · [Bridge-Protokoll](protocol/README.md) · [Testdaten](demo/README.md).
+Für das Plugin sind weder Java noch Zusatzbibliotheken nötig; es liest das
+Containerformat direkt in Python.
+[Installation und Demo](docs/QGIS.md) · [Testdaten](demo/README.md).
 
 ```sh
 ./scripts/build-demo.sh
 python3 scripts/package-qgis.py
 ```
 
-Das Paket liegt unter `build/ibx-qgis-0.4.3.zip`; Java 21 ist erforderlich.
+Das plattformunabhängige Paket liegt unter `build/ibx-qgis-0.5.0.zip`; Java 21
+wird nur noch für die Kommandozeile (Erstellen und Export) gebraucht.
 
 ## Build und Tests
 
-Java 21 ist für Build und Ausführung erforderlich. Der Quellcode wird mit `--release 8` kompiliert; eine Java-8-Laufzeit wird nicht zugesagt. Buildsystem: Gradle Groovy DSL mit gepinntem Wrapper und gesperrten Abhängigkeiten.
+Für den Java-Teil (Bibliothek, CLI, Writer und Java-Tests) ist Java 21 erforderlich.
+Der Quellcode wird mit `--release 8` kompiliert; eine Java-8-Laufzeit wird nicht
+zugesagt. Buildsystem: Gradle Groovy DSL mit gepinntem Wrapper und gesperrten
+Abhängigkeiten. Das QGIS-Plugin selbst ist reines Python und wird ohne Gradle
+gebaut (`python3 scripts/package-qgis.py`).
 
 ```sh
 ./gradlew test build installDist
 build/install/ibx/bin/ibx --help
 ```
 
-`test` verwendet kleine lokale Modelle, einen Loopback-HTTP-Server und einen separaten Prozess mit 32 MiB Heap. Es lädt keine Benchmark-Datensätze herunter. Die Bibliotheken werden beim ersten Gradle-Build aufgelöst. CI ist für Linux und macOS mit Java 21 konfiguriert.
+`test` verwendet kleine lokale Modelle, einen Loopback-HTTP-Server und einen separaten Prozess mit 32 MiB Heap. Es lädt keine Benchmark-Datensätze herunter. Die Bibliotheken werden beim ersten Gradle-Build aufgelöst. CI ist für Linux und macOS mit Java 21 konfiguriert; zusätzlich prüft eine plattformübergreifende Python-Job den Container-Leser des Plugins ohne QGIS und Java (`qgis/tests/test_reader.py`).
 
 ## Container erstellen und exportieren
 
