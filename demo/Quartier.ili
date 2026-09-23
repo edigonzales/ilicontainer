@@ -1,12 +1,8 @@
 INTERLIS 2.4;
-!!@ ibx.label = "Quartier und Unterhalt"
 MODEL Quartier (de) AT "https://example.org/ibx/demo" VERSION "2026-09-19" =
   DOMAIN
     LV95 = COORD 2480000.000 .. 2850000.000, 1070000.000 .. 1300000.000;
-  !!@ ibx.label = "Quartier"
   TOPIC Unterhalt =
-    !!@ ibx.label = "Organisation"
-    !!@ ibx.titleAttribute = "Name"
     CLASS Organisation =
       Name : MANDATORY TEXT*100;
       Telefon : TEXT*40;
@@ -16,7 +12,6 @@ MODEL Quartier (de) AT "https://example.org/ibx/demo" VERSION "2026-09-19" =
       Wert : -999999999999.000000 .. 999999999999.000000;
       Einheit : TEXT*20;
     END Messung;
-    !!@ ibx.label = "Kontrolle"
     STRUCTURE Kontrolle =
       Datum : INTERLIS.XMLDate;
       Ergebnis : (inOrdnung, beobachten, MassnahmeNoetig);
@@ -25,35 +20,25 @@ MODEL Quartier (de) AT "https://example.org/ibx/demo" VERSION "2026-09-19" =
       Kontrollstelle : REFERENCE TO (EXTERNAL) Organisation;
       Standort : LV95;
     END Kontrolle;
-    !!@ ibx.titleAttribute = "Name"
     CLASS Objekt (ABSTRACT) =
       Name : MANDATORY TEXT*100;
       Kontrollen : LIST {0..*} OF Kontrolle;
     END Objekt;
-    !!@ ibx.label = "Gebäude"
-    !!@ ibx.titleAttribute = "Name"
     CLASS Gebaeude EXTENDS Objekt =
       Nummer : 1 .. 9999;
       Nutzung : (Wohnen, Schule, Verwaltung);
       Grundriss : SURFACE WITH (STRAIGHTS, ARCS) VERTEX LV95 WITHOUT OVERLAPS > 0.001;
-      !!@ ibx.label = "Beschriftungsposition"
       Beschriftung : LV95;
     END Gebaeude;
     CLASS Anlage (ABSTRACT) EXTENDS Objekt =
       Position : LV95;
     END Anlage;
-    !!@ ibx.label = "Spielplatz"
-    !!@ ibx.titleAttribute = "Name"
     CLASS Spielplatz EXTENDS Anlage =
       Altersgruppe : TEXT*40;
     END Spielplatz;
-    !!@ ibx.label = "Technische Anlage"
-    !!@ ibx.titleAttribute = "Name"
     CLASS Technik EXTENDS Anlage =
       Typ : (Brunnen, Beleuchtung, Pumpwerk);
     END Technik;
-    !!@ ibx.label = "Unterhaltsauftrag"
-    !!@ ibx.titleAttribute = "Name"
     CLASS Auftrag =
       Name : MANDATORY TEXT*100;
       Datum : INTERLIS.XMLDate;
@@ -61,10 +46,8 @@ MODEL Quartier (de) AT "https://example.org/ibx/demo" VERSION "2026-09-19" =
     END Auftrag;
     ASSOCIATION Arbeit =
       BetroffeneObjekte (EXTERNAL) -- {0..*} Objekt;
-      !!@ ibx.label = "Unterhaltsauftrag"
       Auftrag (EXTERNAL) -- {0..1} Auftrag;
     END Arbeit;
-    !!@ ibx.label = "Zuständigkeit"
     ASSOCIATION Zustaendigkeit =
       Objekt (EXTERNAL) -- {0..*} Objekt;
       Organisation (EXTERNAL) -- {0..*} Organisation;

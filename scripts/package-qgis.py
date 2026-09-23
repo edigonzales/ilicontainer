@@ -23,7 +23,7 @@ for file in ["LICENSE", "THIRD_PARTY.md"]:
 shutil.copytree(
     root / "demo", stage / "demo", ignore=shutil.ignore_patterns("__pycache__")
 )
-output = root / "build/ibx-qgis-0.4.2.zip"
+output = root / "build/ibx-qgis-0.4.3.zip"
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(stage.rglob("*")):
         if path.is_file():

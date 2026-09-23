@@ -19,7 +19,7 @@ from ibx_browser.open_dialog import (
     MODEL_NAMES_SETTING,
     geometry_label,
 )
-from ibx_browser.plugin import Identify, IbxPlugin
+from ibx_browser.plugin import DEMOS, Identify, IbxPlugin
 from ibx_browser.activity import AccessMonitor, source_label
 
 app = QgsApplication([], True)
@@ -64,6 +64,88 @@ def wait_until(condition):
 
 
 class GuiTests(unittest.TestCase):
+    def test_demo_picker_defaults_to_parkanlage_and_opens_selected_demo(self):
+        iface = Iface()
+        plugin = IbxPlugin(iface)
+        plugin.layers = Layers(iface)
+        self.assertEqual("Parkanlage", DEMOS[0][0])
+        for label, filename in DEMOS:
+            with self.subTest(demo=label):
+                opened = Mock()
+                with patch(
+                    "ibx_browser.plugin.QInputDialog.getItem",
+                    return_value=(label, True),
+                ) as choose, patch(
+                    "ibx_browser.plugin.OpenDialog", return_value=opened
+                ) as dialog_type:
+                    plugin.demo()
+                args = choose.call_args.args
+                self.assertEqual([item[0] for item in DEMOS], args[3])
+                self.assertEqual(0, args[4])
+                source = Path(opened.source.setText.call_args.args[0])
+                self.assertEqual(filename, source.name)
+                self.assertTrue(source.is_file())
+                opened.show.assert_called_once_with()
+                opened.load.assert_called_once_with()
+                dialog_type.assert_called_once_with(iface, plugin.layers)
+
+        with patch(
+            "ibx_browser.plugin.QInputDialog.getItem", return_value=("", False)
+        ), patch("ibx_browser.plugin.OpenDialog") as dialog_type:
+            plugin.demo()
+        dialog_type.assert_not_called()
+
+    def test_parkanlage_object_widget_navigation(self):
+        manager.start()
+        dataset = manager.dataset(str(Path("demo/parkanlage.ibx").resolve()))
+        iface = Iface()
+        browser = ObjectBrowser(iface, Layers(iface))
+        iface.window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, browser)
+        self.addCleanup(browser.close)
+        self.addCleanup(iface.window.close)
+        browser.open(dataset, tid="geraet1")
+        wait_until(
+            lambda: browser.obj is not None and browser.tree.relations.complete
+        )
+        self.assertEqual("Rutschbahn", browser.title.text())
+
+        def child(parent, name):
+            for index in range(parent.childCount()):
+                item = parent.child(index)
+                if item.text(0) == name:
+                    return item
+            labels = [parent.child(i).text(0) for i in range(parent.childCount())]
+            self.fail(f"Missing {name!r}; found {labels!r}")
+
+        root = browser.tree.invisibleRootItem()
+        controls = child(root, "Kontrollen")
+        controls.setExpanded(True)
+        self.assertEqual("beobachten", child(controls, "Ergebnis").text(1))
+        measurements = child(controls, "Messwerte")
+        measurements.setExpanded(True)
+        measurement = child(measurements, "Eintrag 1")
+        measurement.setExpanded(True)
+        self.assertEqual("Roststelle", child(measurement, "Merkmal").text(1))
+
+        reference = child(root, "Spielplatz")
+        reference.action()
+        wait_until(
+            lambda: browser.obj is not None
+            and browser.obj.get("tid") == "park0"
+            and browser.tree.relations.complete
+        )
+        related_devices = child(
+            browser.tree.invisibleRootItem(), "Spielgerät · Spielplatz"
+        )
+        self.assertEqual(2, related_devices.childCount())
+        self.assertEqual(
+            {"Nestschaukel", "Rutschbahn"},
+            {
+                related_devices.child(i).text(1)
+                for i in range(related_devices.childCount())
+            },
+        )
+
     def test_geometry_labels(self):
         for geometry, types, expected in [
             (None, set(), "Ohne Geometrie"),
@@ -173,7 +255,7 @@ class GuiTests(unittest.TestCase):
             pos=QPoint(round(pixel.x()), round(pixel.y())),
         )
         wait_until(lambda: browser.obj is not None and browser.tree.relations.complete)
-        self.assertEqual("Haus am Park 1", browser.title.text())
+        self.assertEqual("Gebaeude · 1 · Wohnen", browser.title.text())
         self.assertEqual(1, len(QgsProject.instance().mapLayers()))
 
         # The diagnostics menu resolves the current object first and shows its dock
@@ -285,7 +367,7 @@ class GuiTests(unittest.TestCase):
             "An dieser Stelle kein IBX-Objekt gefunden.",
             iface.bar.currentItem().text(),
         )
-        self.assertEqual("Haus am Park 1", browser.title.text())
+        self.assertEqual("Gebaeude · 1 · Wohnen", browser.title.text())
         for i in range(browser.tree.topLevelItemCount()):
             item = browser.tree.topLevelItem(i)
             if item.text(0) == "Kontrollen":
@@ -303,7 +385,7 @@ class GuiTests(unittest.TestCase):
                 if browser.tree.topLevelItem(i).text(0) == name
             )
 
-        order = top("Unterhaltsauftrag")
+        order = top("Auftrag")
         before_chunks = dataset.call("metrics")["chunksRead"]
         with patch.object(dataset, "call", wraps=dataset.call) as calls:
             order.setExpanded(True)
@@ -314,12 +396,12 @@ class GuiTests(unittest.TestCase):
             self.assertEqual(1, calls.call_count)
         self.assertEqual(0, browser.position)
         self.assertLessEqual(dataset.call("metrics")["chunksRead"] - before_chunks, 1)
-        duty = top("Zuständigkeit · Organisation").child(0)
+        duty = top("Zustaendigkeit · Organisation").child(0)
         with patch.object(dataset, "call", wraps=dataset.call) as calls:
             duty.setExpanded(True)
             self.assertEqual(0, calls.call_count)
             details = duty.child(0)
-            self.assertEqual("Angaben zur Zuständigkeit", details.text(0))
+            self.assertEqual("Angaben zur Zustaendigkeit", details.text(0))
             self.assertEqual(
                 {"Funktion", "Gueltig Ab"},
                 {details.child(i).text(0) for i in range(details.childCount())},
@@ -356,14 +438,24 @@ class GuiTests(unittest.TestCase):
         wait_until(lambda: browser.obj["tid"] == "auftrag0")
         self.assertEqual(5, browser.position)
         iface.window.grab().save("build/qgis/history.png")
-        self.assertIn("Besuchsverlauf", browser.breadcrumb.text())
-        self.assertIn("2 frühere Besuche", browser.breadcrumb.text())
-        self.assertIn("(aktuell)", browser.breadcrumb.text())
-        browser.breadcrumb.linkActivated.emit("earlier")
-        self.assertIn("Haus am Park 1", browser.breadcrumb.text())
-        browser.breadcrumb.linkActivated.emit("visit:1")
+        self.assertEqual("Besuchsverlauf (6)", browser.history_toggle.text())
+        self.assertFalse(browser.history_toggle.isChecked())
+        self.assertTrue(browser.history_list.isHidden())
+        browser.history_toggle.click()
+        self.assertTrue(browser.history_list.isVisible())
+        self.assertEqual(6, browser.history_list.count())
+        self.assertIn("(aktuell)", browser.history_list.item(5).text())
+        item = browser.history_list.item(1)
+        rect = browser.history_list.visualItemRect(item)
+        QTest.mouseClick(
+            browser.history_list.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=rect.center(),
+        )
         wait_until(lambda: browser.position == 1)
-        self.assertIn("4 spätere Besuche", browser.breadcrumb.text())
+        self.assertIn("(aktuell)", browser.history_list.item(1).text())
+        self.assertTrue(browser.forward.isEnabled())
+        self.assertTrue(browser.history_toggle.isChecked())
         browser.travel(1)
         wait_until(lambda: browser.position == 2)
         self.assertEqual("anlage0", browser.obj["tid"])

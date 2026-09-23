@@ -295,10 +295,9 @@ class ObjectTreeTests(unittest.TestCase):
         self.tree.scrollToItem(tech)
         QTest.qWait(60)
         self.tree.grab().save("build/qgis/relations-dark-narrow.png")
-        self.assertNotEqual(
-            self.tree.palette().color(QPalette.ColorRole.Text),
-            tech.foreground(0).color(),
-        )
+        self.assertEqual(tech.foreground(0), nary.foreground(0))
+        self.assertEqual(tech.foreground(1), nary.foreground(1))
+        self.assertEqual(tech.sizeHint(0), nary.sizeHint(0))
         self.tree.copy_item(tech.child(0))
         self.assertIn("M.T.House", app.clipboard().text())
         self.tree.close()

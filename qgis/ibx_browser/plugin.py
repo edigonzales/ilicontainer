@@ -28,6 +28,11 @@ from .open_dialog import OpenDialog
 from .tasks import submit
 from .activity import AccessMonitor, source_label
 
+DEMOS = (
+    ("Parkanlage", "parkanlage.ibx"),
+    ("Quartier und Unterhalt", "quartier.ibx"),
+)
+
 
 class Identify(QgsMapToolIdentify):
     def __init__(self, iface, browser):
@@ -167,9 +172,30 @@ class IbxPlugin:
         dialog.show()
 
     def demo(self):
-        path = Path(__file__).parent / "demo/quartier.ibx"
-        if not path.exists():
-            path = Path(__file__).resolve().parents[2] / "demo/quartier.ibx"
+        labels = [label for label, _ in DEMOS]
+        label, ok = QInputDialog.getItem(
+            self.iface.mainWindow(),
+            "Demo öffnen",
+            "Demo auswählen:",
+            labels,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        filename = dict(DEMOS)[label]
+        candidates = (
+            Path(__file__).parent / "demo" / filename,
+            Path(__file__).resolve().parents[2] / "demo" / filename,
+        )
+        path = next(
+            (candidate for candidate in candidates if candidate.is_file()), None
+        )
+        if path is None:
+            self.iface.messageBar().pushWarning(
+                "IBX", f"Die Demo-Datei {filename} wurde nicht gefunden."
+            )
+            return
         dialog = OpenDialog(self.iface, self.layers)
         self.dialogs.append(dialog)
         dialog.source.setText(str(path))

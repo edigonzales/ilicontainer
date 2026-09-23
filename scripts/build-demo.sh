@@ -2,5 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 python3 demo/generate.py
+python3 demo/generate_parkanlage.py
 ./gradlew installDist --console=plain
 build/install/ibx/bin/ibx create demo/quartier.xtf demo/quartier.ibx --overwrite --model-file demo/Quartier.ili --geometry-encoding wkb --geometry-crs Quartier.Unterhalt.Gebaeude.Grundriss=EPSG:2056 --geometry-crs Quartier.Unterhalt.Gebaeude.Beschriftung=EPSG:2056 --geometry-crs Quartier.Unterhalt.Anlage.Position=EPSG:2056 --geometry-crs Quartier.Unterhalt.Spielplatz.Position=EPSG:2056 --geometry-crs Quartier.Unterhalt.Technik.Position=EPSG:2056 --geometry-crs Quartier.Unterhalt.Kontrolle.Standort=EPSG:2056 --spatial Quartier.Unterhalt.Gebaeude:Grundriss --spatial Quartier.Unterhalt.Gebaeude:Beschriftung --spatial Quartier.Unterhalt.Spielplatz:Position --spatial Quartier.Unterhalt.Technik:Position --crs EPSG:2056 --embed-models
+build/install/ibx/bin/ibx create demo/parkanlage.xtf demo/parkanlage.ibx --overwrite --model-file demo/Parkanlage.ili --geometry-encoding wkb --geometry-crs Parkanlage.Park.Spielplatz.Flaeche=EPSG:2056 --geometry-crs Parkanlage.Park.Spielgeraet.Position=EPSG:2056 --spatial Parkanlage.Park.Spielplatz:Flaeche --spatial Parkanlage.Park.Spielgeraet:Position --crs EPSG:2056 --embed-models

@@ -172,6 +172,71 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertIsNone(d.call("object", tid="not-present"))
 
+    def test_parkanlage_geometry_and_model(self):
+        d = manager.dataset(str(Path("demo/parkanlage.ibx").resolve()))
+        counts = {}
+        for item in d.catalog:
+            counts[item["className"]] = counts.get(item["className"], 0) + item["count"]
+        self.assertEqual(3, counts["Parkanlage.Park.Spielplatz"])
+        self.assertEqual(6, counts["Parkanlage.Park.Spielgeraet"])
+
+        definitions = d.meta["definitions"]
+        self.assertFalse(
+            any("extends" in definition for definition in definitions.values())
+        )
+        self.assertFalse(
+            any(
+                definition.get("kind") == "association"
+                for definition in definitions.values()
+            )
+        )
+        reference = definitions["Parkanlage.Park.Spielgeraet.Spielplatz"]
+        self.assertEqual("Parkanlage.Park.Spielplatz", reference["target"])
+
+        playgrounds = QgsVectorLayer(
+            uri(d.source, d.state, "Parkanlage.Park.Spielplatz", "Flaeche"),
+            "Parkanlage",
+            "ibx",
+        )
+        devices = QgsVectorLayer(
+            uri(d.source, d.state, "Parkanlage.Park.Spielgeraet", "Position"),
+            "Spielgeräte",
+            "ibx",
+        )
+        self.assertTrue(playgrounds.isValid())
+        self.assertTrue(devices.isValid())
+        self.assertEqual(3, playgrounds.featureCount())
+        self.assertEqual(6, devices.featureCount())
+        self.assertTrue(
+            all(feature.hasGeometry() for feature in playgrounds.getFeatures())
+        )
+        self.assertTrue(all(feature.hasGeometry() for feature in devices.getFeatures()))
+
+        device = d.call("object", tid="geraet1")
+        control = device["fields"]["Kontrollen"][0]
+        self.assertEqual("structure", control["kind"])
+        self.assertEqual("beobachten", control["fields"]["Ergebnis"][0]["value"])
+        measurement = control["fields"]["Messwerte"][0]
+        self.assertEqual("Roststelle", measurement["fields"]["Merkmal"][0]["value"])
+
+        playground = d.call("object", tid="park0")
+        related = d.call("related", fid=playground["fid"], limit=50)
+        self.assertTrue(related["indexed"])
+        self.assertEqual(2, len(related["items"]))
+        self.assertEqual(
+            {"geraet0", "geraet1"},
+            {item["object"]["tid"] for item in related["items"]},
+        )
+
+    def test_quartier_model_has_no_ibx_label_or_title_metadata(self):
+        model = Path("demo/Quartier.ili").read_text(encoding="utf-8")
+        self.assertNotIn("!!@ ibx.", model)
+        for definition in self.dataset.meta["definitions"].values():
+            self.assertFalse(definition.get("titleAttribute"))
+        definitions = self.dataset.meta["definitions"]
+        self.assertEqual("Gebaeude", definitions["Quartier.Unterhalt.Gebaeude"]["label"])
+        self.assertEqual("Auftrag", definitions["Quartier.Unterhalt.Auftrag"]["label"])
+
 
 if __name__ == "__main__":
     unittest.main()

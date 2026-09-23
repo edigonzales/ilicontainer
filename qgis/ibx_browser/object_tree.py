@@ -1,7 +1,7 @@
 """Lazy Qt object tree. Every request belongs to one node and one view generation."""
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal, QSize, QEvent
-from qgis.PyQt.QtGui import QBrush, QColor, QPalette, QKeySequence
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QEvent
+from qgis.PyQt.QtGui import QPalette, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
@@ -23,7 +23,6 @@ class Item(QTreeWidgetItem):
         self.ticket = 0
         self.task = None
         self.action = None
-        self.technical = False
         self.groups = {}
         self.seen = set()
         self.edge_count = 0
@@ -352,7 +351,7 @@ class ObjectTree(QTreeWidget):
                     if group is None:
                         parent = control.parent() or self.invisibleRootItem()
                         group = Item(parent, [entry.group, "", ""])
-                        # Keep the page control after all its groups, and before technical details.
+                        # Keep the page control after all groups and before object details.
                         parent.takeChild(parent.indexOfChild(group))
                         parent.insertChild(parent.indexOfChild(control), group)
                         group.setToolTip(0, entry.group)
@@ -424,8 +423,6 @@ class ObjectTree(QTreeWidget):
 
     def add_technical(self, obj):
         tech = Item(self, ["Technische Details", "", ""])
-        tech.technical = True
-        tech.setSizeHint(0, QSize(0, 34))
         for name, value in [
             ("Klasse", obj["className"]),
             ("TID", obj.get("tid")),
@@ -436,21 +433,6 @@ class ObjectTree(QTreeWidget):
             Item(
                 tech, [name, str(value) if value is not None else "Ohne eigene TID", ""]
             )
-        self.style_technical(tech)
-
-    def style_technical(self, tech):
-        foreground, background = self.palette().color(
-            QPalette.ColorRole.Text
-        ), self.palette().color(QPalette.ColorRole.Base)
-        color = QColor(
-            *[
-                round(0.78 * a + 0.22 * b)
-                for a, b in zip(foreground.getRgb()[:3], background.getRgb()[:3])
-            ]
-        )
-        for item in [tech] + [tech.child(i) for i in range(tech.childCount())]:
-            for column in (0, 1):
-                item.setForeground(column, QBrush(color))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -469,8 +451,6 @@ class ObjectTree(QTreeWidget):
                 for i in range(parent.childCount()):
                     child = parent.child(i)
                     if isinstance(child, Item):
-                        if child.technical:
-                            self.style_technical(child)
                         if child.action:
                             child.setForeground(
                                 2, self.palette().brush(QPalette.ColorRole.Link)
@@ -478,12 +458,3 @@ class ObjectTree(QTreeWidget):
                     update(child)
 
             update(self.invisibleRootItem())
-
-    def drawRow(self, painter, option, index):
-        super().drawRow(painter, option, index)
-        item = self.itemFromIndex(index)
-        if isinstance(item, Item) and item.technical:
-            painter.save()
-            painter.setPen(self.palette().color(QPalette.ColorRole.Mid))
-            painter.drawLine(option.rect.topLeft(), option.rect.topRight())
-            painter.restore()

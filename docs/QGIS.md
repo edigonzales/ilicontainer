@@ -16,14 +16,26 @@ python3 scripts/package-qgis.py
 ```
 
 In QGIS unter **Erweiterungen → Erweiterungen verwalten → Aus ZIP installieren**
-`build/ibx-qgis-0.4.2.zip` auswählen. Das ZIP enthält Plugin, Bridge-Abhängigkeiten,
+`build/ibx-qgis-0.4.3.zip` auswählen. Das ZIP enthält Plugin, Bridge-Abhängigkeiten,
 Demodatei, Modell und XTF; keine Java-Laufzeit. QGIS anschliessend neu starten.
 Unter **IBX → Einstellungen** kann die Java-Ausführungsdatei angegeben werden,
 z.B. `/Users/name/.sdkman/candidates/java/21.0.10-tem/bin/java`.
 Das Bridge-Verzeichnis bleibt beim ZIP-Paket leer (automatische Erkennung).
 
-**IBX → Demo öffnen** oder **IBX öffnen …** → `demo/quartier.ibx` wählen → **Gebäude / Grundriss** hinzufügen.
-Die Auswahl trennt **Name**, **Modellart** (Klasse oder Assoziation),
+**IBX → Demo öffnen** öffnet die Auswahl der mitgelieferten Beispiele. **Parkanlage**
+ist der empfohlene Einstieg: **Spielplatz / Fläche** oder **Spielgerät / Position**
+hinzufügen, dann ein Spielgerät mit **IBX-Objekt erkunden** anklicken. Im Objektfenster
+lassen sich Kontrollen mit Messwerten aufklappen, zum verknüpften Spielplatz wechseln
+und dort die zugeordneten Geräte ansehen. Die einfach gehaltene Demo hat keine
+Vererbung oder n:m-Beziehungen.
+
+Über denselben Menüpunkt lässt sich **Quartier und Unterhalt** öffnen. Als
+komplexere Demo enthält sie Vererbungen, Assoziationen, Selbstbezüge und mehrere
+Geometriesichten. Zum Einstieg einen **Gebaeude / Grundriss**-Layer hinzufügen.
+Das Modell enthält absichtlich keine `ibx.*`-Metaattribute: Klassen- und
+Attributnamen werden aus den Modellbezeichnern angezeigt.
+
+Die Layerauswahl trennt **Name**, **Modellart** (Klasse oder Assoziation),
 **Geometrie** und **Anzahl**. **Modellnamen anzeigen** blendet die qualifizierten
 Originalnamen ein; die Wahl wird im QGIS-Profil gespeichert. Die Suche findet
 auch ausgeblendete Modellnamen. Die Anzahl folgt der Basket-Auswahl und zählt
@@ -34,7 +46,7 @@ Instanzen im Katalog enthalten sind.
 Mit **IBX-Objekt erkunden** ein Gebäude anklicken. Im Objektfenster:
 
 1. Kontrollen und Messungen aufklappen.
-2. Unterhaltsauftrag mit dem Baumpfeil aufklappen. Seine Angaben erscheinen im
+2. `Auftrag` mit dem Baumpfeil aufklappen. Seine Angaben erscheinen im
    Haus; das Haus bleibt Hauptobjekt. Mit **Öffnen →** in der Aktionsspalte zum
    Auftrag wechseln. Der Auftrag muss nicht als Layer geladen sein.
 3. Unter **Arbeit · Betroffene Objekte** einen Spielplatz aufklappen oder öffnen.
@@ -49,8 +61,8 @@ bei Bedarf; **Öffnen →** macht es zum Hauptobjekt. Die Eingabetaste führt di
 Aktion der markierten Zeile aus, Rechts/Links klappt auf/zu. Das Kontextmenü
 bietet Aktionen und **Kopieren**; Strukturen bleiben Teile desselben Objekts.
 
-Bei **Zuständigkeit · Organisation** stehen Funktion und Gültigkeit unter
-**Angaben zur Zuständigkeit**. Die Organisationsangaben werden separat
+Bei **Zustaendigkeit · Organisation** stehen Funktion und Gültigkeit unter
+**Angaben zur Zustaendigkeit**. Die Organisationsangaben werden separat
 aufgeklappt. **Öffnen →** führt zur Organisation; **Assoziation öffnen** im
 Kontextmenü öffnet die vollständige Zuständigkeitsinstanz. Verschiedene
 Zuständigkeiten zum gleichen Ziel bleiben getrennt. Assoziationen mit mehr als
@@ -64,15 +76,17 @@ werden ausdrücklich angezeigt. Fehler lassen sich an der betroffenen Zeile
 wiederholen. Ein bereits übergeordnetes Objekt erscheint als **Bereits weiter
 oben angezeigt**; die Aktion springt zu dieser Darstellung. Aufklappen verändert
 den Besuchsverlauf nicht. Karte, Tabelle und Export unten beziehen sich auf das
-Hauptobjekt. Technische Details sind optisch abgesetzt und weiterhin kopierbar.
+Hauptobjekt. **Technische Details** stehen als normaler, aufklappbarer Knoten am
+Ende des Objektbaums und lassen sich wie andere Baumzeilen kopieren.
 
-Der **Besuchsverlauf** zeigt die Reihenfolge geöffneter Objekte, keine Hierarchie.
-Nummerierte Links öffnen frühere Besuche; das aktuelle Objekt ist fett markiert.
-Wiederholte Besuche bleiben sichtbar. Ältere Einträge lassen sich einblenden;
-spätere Besuche bleiben über „Vorwärts“ erreichbar. Ein neuer Beziehungsklick
-nach „Zurück“ beginnt einen neuen Verlauf ab dieser Stelle. Fehler und Abbruch
-verändern die aktuelle Position nicht. **Baskets** filtern die Layerauswahl;
-keine Auswahl bedeutet alle Baskets.
+Der **Besuchsverlauf** ist beim Öffnen eingeklappt und zeigt die Anzahl der
+Besuche. Aufgeklappt erscheint die vollständige Reihenfolge in einer Liste mit
+eigener Bildlaufleiste; ein Eintrag öffnet den jeweiligen Besuch, der aktuelle
+Eintrag ist fett markiert. Die Klappstellung bleibt bei Objektwechseln erhalten.
+Zurück/Vorwärts bleiben verfügbar. Ein neuer Beziehungsklick nach
+„Zurück“ verwirft spätere Einträge und beginnt dort einen neuen Verlauf. Fehler
+und Abbruch verändern die aktuelle Position nicht. **Baskets** filtern die
+Layerauswahl; keine Auswahl bedeutet alle Baskets.
 
 „Attributtabelle“ bietet zusätzlich eine normale QGIS-Tabelle der Klasse.
 Bestehende Layerfilter werden beim Navigieren nicht verändert. Hervorhebungen
@@ -127,8 +141,8 @@ Optionale INTERLIS-Metadaten vor einer Klasse oder einem Attribut:
 
 `ibx.label` benennt das Modellelement in der Oberfläche, beispielsweise die
 Klasse „Gebäude“. `ibx.titleAttribute` bezeichnet dagegen ein vorhandenes skalares
-Attribut der Klasse, dessen Wert den Titel eines einzelnen Objekts bildet,
-beispielsweise „Haus am Park 1“ im Objektbrowser und Besuchsverlauf.
+Attribut der Klasse, dessen Wert den Titel eines einzelnen Objekts bildet.
+Das Quartier-Demomodell verwendet diese Metadaten bewusst nicht.
 Es erzeugt kein neues Attribut und verändert keine Daten. Dokumentation,
 Kardinalitäten, Strukturtypen, Rollen, Vererbung, Einheiten und Aufzählungen werden
 beim Erstellen gespeichert. Zum Lesen wird kein Modellserver benötigt.

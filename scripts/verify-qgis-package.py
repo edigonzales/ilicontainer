@@ -10,10 +10,20 @@ root = Path(__file__).resolve().parents[1]
 archive_path = (
     Path(sys.argv[1]).resolve()
     if len(sys.argv) > 1
-    else root / "build/ibx-qgis-0.4.2.zip"
+    else root / "build/ibx-qgis-0.4.3.zip"
 )
 with tempfile.TemporaryDirectory(prefix="ibx-package-") as temp:
     with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+        for path in (
+            "ibx_browser/demo/Parkanlage.ili",
+            "ibx_browser/demo/parkanlage.xtf",
+            "ibx_browser/demo/parkanlage.ibx",
+            "ibx_browser/demo/Quartier.ili",
+            "ibx_browser/demo/quartier.xtf",
+            "ibx_browser/demo/quartier.ibx",
+        ):
+            assert path in names, f"Missing packaged demo asset: {path}"
         archive.extractall(temp)
     for test in ("test_presentation.py", "test_object_tree.py", "test_ui.py"):
         code = """

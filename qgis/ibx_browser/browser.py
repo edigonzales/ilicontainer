@@ -1,4 +1,3 @@
-from html import escape
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -8,6 +7,9 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QLabel,
     QFileDialog,
+    QToolButton,
+    QListWidget,
+    QListWidgetItem,
 )
 from .tasks import submit
 from .object_tree import ObjectTree
@@ -21,7 +23,6 @@ class ObjectBrowser(QDockWidget):
         self.dataset, self.obj = None, None
         self.history = []
         self.position = -1
-        self.show_full_history = False
         self.generation = 0
         self.task = None
         root = QWidget()
@@ -36,16 +37,34 @@ class ObjectBrowser(QDockWidget):
         for w in [self.back, self.forward, self.cancel]:
             nav.addWidget(w)
         layout.addLayout(nav)
-        self.breadcrumb = QLabel("Datei öffnen und ein Objekt auf der Karte auswählen.")
-        self.breadcrumb.setWordWrap(True)
-        self.breadcrumb.setTextFormat(Qt.TextFormat.RichText)
-        self.breadcrumb.setOpenExternalLinks(False)
-        self.breadcrumb.linkActivated.connect(self.history_link)
-        self.breadcrumb.setToolTip(
-            "Besuchsreihenfolge, keine Hierarchie. Beziehungen öffnen einen neuen Besuch; "
-            "Zurück/Vorwärts und die Links wechseln zu einem vorhandenen Besuch."
+        self.history_hint = QLabel("Datei öffnen und ein Objekt auf der Karte auswählen.")
+        self.history_hint.setWordWrap(True)
+        layout.addWidget(self.history_hint)
+        self.history_toggle = QToolButton()
+        self.history_toggle.setObjectName("ibxHistoryToggle")
+        self.history_toggle.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        layout.addWidget(self.breadcrumb)
+        self.history_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.history_toggle.setText("Besuchsverlauf (0)")
+        self.history_toggle.setCheckable(True)
+        self.history_toggle.setChecked(False)
+        self.history_toggle.setToolTip(
+            "Besuchsreihenfolge, keine Hierarchie. Beziehungen öffnen einen neuen Besuch."
+        )
+        self.history_toggle.toggled.connect(self.toggle_history)
+        self.history_toggle.hide()
+        layout.addWidget(self.history_toggle)
+        self.history_list = QListWidget()
+        self.history_list.setObjectName("ibxHistoryList")
+        self.history_list.setAlternatingRowColors(True)
+        self.history_list.setMaximumHeight(130)
+        self.history_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.history_list.itemClicked.connect(self.visit_history_item)
+        self.history_list.hide()
+        layout.addWidget(self.history_list)
         self.title = QLabel("Objekte und ihre Zusammenhänge")
         self.title.setStyleSheet("font-size:18px;font-weight:600;padding:8px 0")
         self.title.setWordWrap(True)
@@ -147,40 +166,36 @@ class ObjectBrowser(QDockWidget):
         super().closeEvent(event)
 
     def render_history(self):
-        start = 0 if self.show_full_history else max(0, self.position - 3)
-        visits = []
-        if start:
-            visits.append(f'<a href="earlier">… {start} frühere Besuche</a>')
-        elif self.show_full_history and self.position > 3:
-            visits.append('<a href="earlier">Frühere Besuche ausblenden</a>')
-        for i in range(start, self.position + 1):
-            dataset, _, title = self.history[i]
-            label = escape(title)
-            if i == self.position:
-                visits.append(f"<b>{i + 1}. {label} (aktuell)</b>")
-            else:
-                visits.append(
-                    f'<a href="visit:{i}" title="{escape(dataset.source, quote=True)}">'
-                    f"{i + 1}. {label}</a>"
-                )
-        forward = len(self.history) - self.position - 1
-        suffix = (
-            f"<br>{forward} spätere Besuche über „Vorwärts“ erreichbar."
-            if forward
-            else ""
-        )
-        self.breadcrumb.setText(
-            "<b>Besuchsverlauf</b> · Reihenfolge der geöffneten Objekte<br>"
-            + " → ".join(visits)
-            + suffix
-        )
+        self.history_list.clear()
+        current = None
+        for index, (dataset, _, title) in enumerate(self.history):
+            text = f"{index + 1}. {title}"
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, index)
+            item.setToolTip(dataset.source)
+            if index == self.position:
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+                item.setText(text + " (aktuell)")
+                current = item
+            self.history_list.addItem(item)
+        self.history_toggle.setText(f"Besuchsverlauf ({len(self.history)})")
+        self.history_hint.hide()
+        self.history_toggle.show()
+        if self.history_toggle.isChecked() and current:
+            self.history_list.scrollToItem(current)
 
-    def history_link(self, link):
-        if link == "earlier":
-            self.show_full_history = not self.show_full_history
-            self.render_history()
-        elif link.startswith("visit:") and link[6:].isdigit():
-            self.visit(int(link[6:]))
+    def toggle_history(self, expanded):
+        self.history_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        )
+        self.history_list.setVisible(expanded)
+
+    def visit_history_item(self, item):
+        position = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(position, int):
+            self.visit(position)
 
     def visit(self, position):
         if 0 <= position < len(self.history) and position != self.position:
