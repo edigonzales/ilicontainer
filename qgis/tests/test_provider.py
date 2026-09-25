@@ -184,14 +184,25 @@ class ProviderTests(unittest.TestCase):
         self.assertFalse(
             any("extends" in definition for definition in definitions.values())
         )
-        self.assertFalse(
-            any(
-                definition.get("kind") == "association"
-                for definition in definitions.values()
-            )
-        )
-        reference = definitions["Parkanlage.Park.Spielgeraet.Spielplatz"]
-        self.assertEqual("Parkanlage.Park.Spielplatz", reference["target"])
+        association_name = "Parkanlage.Park.SpielplatzZuordnung"
+        associations = [
+            name
+            for name, definition in definitions.items()
+            if definition.get("kind") == "association"
+        ]
+        self.assertEqual([association_name], associations)
+        self.assertEqual("Spielplatz-Zuordnung", definitions[association_name]["label"])
+        devices_role = definitions[association_name + ".Spielgeraete"]
+        playground_role = definitions[association_name + ".Spielplatz"]
+        self.assertEqual("Parkanlage.Park.Spielgeraet", devices_role["target"])
+        self.assertEqual("Parkanlage.Park.Spielplatz", playground_role["target"])
+        self.assertEqual("{0..*}", devices_role["cardinality"])
+        self.assertEqual("{1}", playground_role["cardinality"])
+        device_role = definitions["Parkanlage.Park.Spielgeraet.Spielplatz"]
+        self.assertEqual("Parkanlage.Park.Spielplatz", device_role["target"])
+        self.assertEqual(association_name, device_role["association"])
+        self.assertEqual("{1}", device_role["cardinality"])
+        self.assertNotIn(association_name, counts)
 
         playgrounds = QgsVectorLayer(
             uri(d.source, d.state, "Parkanlage.Park.Spielplatz", "Flaeche"),
@@ -213,6 +224,7 @@ class ProviderTests(unittest.TestCase):
         self.assertTrue(all(feature.hasGeometry() for feature in devices.getFeatures()))
 
         device = d.call("object", tid="geraet1")
+        self.assertEqual("park0", device["fields"]["Spielplatz"][0]["tid"])
         control = device["fields"]["Kontrollen"][0]
         self.assertEqual("structure", control["kind"])
         self.assertEqual("beobachten", control["fields"]["Ergebnis"][0]["value"])

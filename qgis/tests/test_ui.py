@@ -135,7 +135,7 @@ class GuiTests(unittest.TestCase):
             and browser.tree.relations.complete
         )
         related_devices = child(
-            browser.tree.invisibleRootItem(), "Spielgerät · Spielplatz"
+            browser.tree.invisibleRootItem(), "Spielplatz-Zuordnung · Spielgeräte"
         )
         self.assertEqual(2, related_devices.childCount())
         self.assertEqual(

@@ -26,8 +26,9 @@ Zstandard-Bibliothek angegeben werden; leer bedeutet automatische Erkennung.
 ist der empfohlene Einstieg: **Spielplatz / Fläche** oder **Spielgerät / Position**
 hinzufügen, dann ein Spielgerät mit **IBX-Objekt erkunden** anklicken. Im Objektfenster
 lassen sich Kontrollen mit Messwerten aufklappen, zum verknüpften Spielplatz wechseln
-und dort die zugeordneten Geräte ansehen. Die einfach gehaltene Demo hat keine
-Vererbung oder n:m-Beziehungen.
+und dort über **Spielplatz-Zuordnung · Spielgeräte** die zugeordneten Geräte ansehen.
+Die einfache Demo verwendet eine binäre 1:n-Assoziation ohne eigene Attribute oder
+OID. Sie hat keine Vererbung oder n:m-Beziehungen.
 
 Über denselben Menüpunkt lässt sich **Quartier und Unterhalt** öffnen. Als
 komplexere Demo enthält sie Vererbungen, Assoziationen, Selbstbezüge und mehrere

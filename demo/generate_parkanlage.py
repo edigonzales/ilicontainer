@@ -15,7 +15,7 @@ def coord(x, y):
     return f"<g:coord><g:c1>{x:.3f}</g:c1><g:c2>{y:.3f}</g:c2></g:coord>"
 
 
-def reference(name, tid):
+def role_reference(name, tid):
     return f'<p:{name} ili:ref="{tid}"/>'
 
 
@@ -194,7 +194,7 @@ def write(path):
                 + field("Typ", device["typ"])
                 + field("Zustand", device["zustand"])
                 + f"<p:Position>{coord(x, y)}</p:Position>"
-                + reference("Spielplatz", device["park"])
+                + role_reference("Spielplatz", device["park"])
                 + controls(device["checks"])
             )
             out.write(object_("Spielgeraet", device["tid"], body))

@@ -30,8 +30,13 @@ MODEL Parkanlage (de) AT "https://example.org/ibx/demo" VERSION "2026-09-23" =
       Typ : (Schaukel, Rutschbahn, Kletterturm, Wippe);
       Zustand : (gut, pruefen, ersetzen);
       Position : LV95;
-      Spielplatz : MANDATORY REFERENCE TO (EXTERNAL) Spielplatz;
       Kontrollen : LIST {0..*} OF Kontrolle;
     END Spielgeraet;
+    !!@ ibx.label = "Spielplatz-Zuordnung"
+    ASSOCIATION SpielplatzZuordnung =
+      !!@ ibx.label = "Spielgeräte"
+      Spielgeraete -- {0..*} Spielgeraet;
+      Spielplatz -- {1} Spielplatz;
+    END SpielplatzZuordnung;
   END Park;
 END Parkanlage.

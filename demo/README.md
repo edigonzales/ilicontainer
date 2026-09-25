@@ -8,9 +8,13 @@ zwischen den Beispielen gewählt werden; „Parkanlage“ ist der einfache Einst
 ## Parkanlage
 
 Das einfache Modell enthält drei Spielplätze mit Flächengeometrie und sechs
-Spielgeräte mit Punktgeometrie. Jedes Spielgerät verweist auf genau einen
-Spielplatz. Spielgeräte enthalten Kontrollen und darin Messwert-Strukturen; es
-gibt weder Vererbung noch Assoziationsklassen oder n:m-Beziehungen.
+Spielgeräte mit Punktgeometrie. Die binäre Assoziation `SpielplatzZuordnung`
+ordnet jedes Spielgerät genau einem Spielplatz zu; ein Spielplatz kann beliebig
+viele Geräte haben. Die Rolle `Spielplatz` hat Kardinalität `{1}`, die Rolle
+`Spielgeraete` `{0..*}`. Die Assoziation gilt innerhalb des einzelnen Baskets und
+hat keine eigenen Attribute oder OID.
+Spielgeräte enthalten Kontrollen und darin Messwert-Strukturen; es gibt weder
+Vererbung noch n:m-Beziehungen.
 
 Die Daten zeigen alle Kontrollresultate, verschachtelte Messwerte und ein Gerät
 ohne Kontrollen. Ein guter Einstieg ist `geraet0` / „Nestschaukel“: Die Kontrolle
