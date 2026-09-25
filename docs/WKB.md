@@ -114,10 +114,13 @@ CBOR-Objektrecords und liefert die gespeicherten WKB-Bytes ohne IOM-Rekonstrukti
 
 ```sh
 ./gradlew build installDist
+# Unabhängige Formatprüfung im separaten iox-ibx-Checkout:
+cd ../iox-ibx
+./gradlew test
 python3 scripts/verify-wkb-gdal.py  # benötigt GDAL-Python-Bindings
 ```
 
-Linux-CI installiert `python3-gdal` und führt den unabhängigen Test verpflichtend
+Die Linux-CI von iox-ibx installiert `python3-gdal` und führt den unabhängigen Test verpflichtend
 aus. 22 explizite XY-/XYZ-Testgeometrien werden gegen unabhängig geschriebene
 WKT-Erwartungen geprüft, einschliesslich Typ, Dimension, Kontrollpunkten und
 byteidentischer ISO-WKB-Rückgabe. Ein lokaler Linux-Lauf wurde mit GDAL 3.11.4
