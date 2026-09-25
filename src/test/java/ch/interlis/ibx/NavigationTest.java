@@ -116,7 +116,7 @@ public class NavigationTest {
       Map<String, Object> fields = (Map<String, Object>) building.get("fields");
       assertEquals(2, ((List<?>) fields.get("Kontrollen")).size());
       assertEquals(
-          "Gebäude", c.metadata().definitions.get("Quartier.Unterhalt.Gebaeude").get("label"));
+          "Gebaeude", c.metadata().definitions.get("Quartier.Unterhalt.Gebaeude").get("label"));
       assertEquals(
           "Quartier.Unterhalt.Auftrag",
           c.metadata().definitions.get("Quartier.Unterhalt.Gebaeude.Auftrag").get("target"));
