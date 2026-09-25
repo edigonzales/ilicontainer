@@ -12,7 +12,7 @@ Compile `scripts/SpatialBenchmark.java` against the baseline distribution into
 `python3 scripts/report-spatial-benchmark.py benchmark-data/swisstopo-wkb/format5`
 checks identical ordered result digests and reports median/p95 and metrics.
 
-Each paired scenario has three warm-ups and ten measurements. BBox half-widths
+Each paired scenario has at least three warm-ups and ten measurements. Java repetitions can be increased through IBX_BENCH_WARMUPS and IBX_BENCH_RUNS. BBox half-widths
 are 20 m, 1 km and 10 km at the same Swiss coordinate. Address/locality indexes
 are exercised; streets have no spatial index and serve as an object-ID control.
 Both readers also resolve a known object ID in every dataset.

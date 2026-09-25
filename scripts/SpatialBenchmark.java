@@ -55,10 +55,14 @@ public class SpatialBenchmark {
                 transport.equals("local")
                     ? IbxContainer.open(file, options)
                     : IbxContainer.open(server.uri(), options)) {
-              for (int warmup = 0; warmup < 3; warmup++) query(c, cls, attr, tid, x, y, radius);
+              for (int warmup = 0;
+                  warmup < Integer.parseInt(System.getenv().getOrDefault("IBX_BENCH_WARMUPS", "3"));
+                  warmup++) query(c, cls, attr, tid, x, y, radius);
               List<Object> runs = new ArrayList<>();
               String expected = null;
-              for (int i = 0; i < 10; i++) {
+              for (int i = 0;
+                  i < Integer.parseInt(System.getenv().getOrDefault("IBX_BENCH_RUNS", "10"));
+                  i++) {
                 if (cache.equals("cold")) c.clearCache();
                 c.metrics().reset();
                 long start = System.nanoTime();
