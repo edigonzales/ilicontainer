@@ -2,7 +2,7 @@
 build/
 benchmark-data/
 *.ibx
-!src/test/resources/format4/*.ibx
+!src/test/resources/format5/*.ibx
 .DS_Store
 
 !demo/*.ibx

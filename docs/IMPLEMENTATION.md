@@ -1,6 +1,6 @@
 # Implementierung und Abnahme
 
-IBX verwendet Format 4, Java-Packages `ch.interlis.ibx`, die API `IbxContainer`
+IBX verwendet Format 5, Java-Packages `ch.interlis.ibx`, die API `IbxContainer`
 und die CLI `ibx`. Der bisherige Java-Kern bleibt erhalten; NavigationBuilder
 schreibt den Katalog und den Rückwärtsindex über begrenzte externe Sortierung.
 `Navigation` bietet vollständige typisierte Objekte, Katalogseiten und eingehende

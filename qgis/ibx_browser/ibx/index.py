@@ -1,4 +1,4 @@
-"""Immutable B+ tree directory of container format 4.
+"""Immutable B+ tree directory of container format 5.
 
 Mirrors ``ch.interlis.ibx.index.BTree`` and ``Keys`` for reading.  Pages are
 prefix-compressed; long fields live in OVERFLOW frames.  Keys are compared as

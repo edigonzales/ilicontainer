@@ -8,7 +8,7 @@ Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren
 - [Optionales WKB-Profil und direkte GIS-API](docs/WKB.md)
 - [Benchmarks und Reproduktion](docs/BENCHMARKS.md)
 
-**Kompatibilitätsbruch:** Reader und Writer unterstützen ausschliesslich IBX-Containerformat 4. IliContainer-Dateien der Formate 1, 2 und 3 müssen aus den ursprünglichen XTF-Quellen neu erstellt werden.
+**Kompatibilitätsbruch:** Reader und Writer unterstützen ausschliesslich IBX-Containerformat 5. IBX-/IliContainer-Dateien der Formate 1, 2, 3 und 4 müssen aus den ursprünglichen XTF-Quellen neu erstellt werden.
 
 ## QGIS-Prototyp
 
@@ -147,4 +147,4 @@ try (IbxContainer container = IbxContainer.open(uri, options)) {
 
 Standardmässig werden höchstens 32 Objektpositionen vorausgelesen. Bytebereiche werden nur bei höchstens 4 KiB Abstand und bis zu insgesamt 1 MiB zusammengefasst. Vorab geladene Frames und normale Lesezugriffe teilen sich den 32-MiB-Cache; Frames oberhalb des Cachebudgets werden bei Bedarf gelesen und nicht dauerhaft gespeichert. `RemoteOptions` ist auch bei `open(Path, options)` verwendbar. Chunk-Grösse, räumliche Anordnung und Vorladen sind anhand des eigenen Abfragemusters zu vergleichen; die [Messmatrix](docs/benchmarks/format3/README.md) weist auch Verschlechterungen aus.
 
-Die Distribution enthält Bibliotheks-JAR, Abhängigkeiten und Startskripte. Der gemeinsame Formatkern wird als `ch.interlis:iox-ibx:0.1.0-SNAPSHOT` von `https://jars.interlis.guru/snapshots` bezogen. Quellcode und IOX-Writer liegen in [iox-ibx](https://github.com/edigonzales/iox-ibx); CLI, Benchmarks, Bridge und QGIS bleiben hier. Keine langfristige Garantie für Dateiformat oder API.
+Die Distribution enthält Bibliotheks-JAR, Abhängigkeiten und Startskripte. Der gemeinsame Formatkern wird als `ch.interlis:iox-ibx:0.2.0-SNAPSHOT` von `https://jars.interlis.guru/snapshots` bezogen. Quellcode und IOX-Writer liegen in [iox-ibx](https://github.com/edigonzales/iox-ibx); CLI, Benchmarks, Bridge und QGIS bleiben hier. Keine langfristige Garantie für Dateiformat oder API.

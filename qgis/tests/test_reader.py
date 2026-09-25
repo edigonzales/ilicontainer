@@ -162,7 +162,7 @@ class ContainerTests(unittest.TestCase):
     def test_header_footer_and_metadata(self):
         container, navigation = open_container(QUARTIER)
         try:
-            self.assertEqual(4, container.version)
+            self.assertEqual(5, container.version)
             self.assertEqual(container.size, os.path.getsize(QUARTIER))
             metadata = navigation.describe()["metadata"]
             self.assertEqual("wkb", metadata["geometryEncoding"])

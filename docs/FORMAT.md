@@ -1,8 +1,8 @@
-# Experimentelles Dateiformat 4
+# Experimentelles Dateiformat 5
 
-Die Transfermetadaten `version` unterscheiden XTF 2.3 und 2.4; beide verwenden denselben Format-4-Container. Bei 2.3 bleibt die XML-Abbildung ohne 2.4-Namensmapping. Der XTF-Rückexport erhält die Transfer-Version.
+Die Transfermetadaten `version` unterscheiden XTF 2.3 und 2.4; beide verwenden denselben Format-5-Container. Bei 2.3 bleibt die XML-Abbildung ohne 2.4-Namensmapping. Der XTF-Rückexport erhält die Transfer-Version.
 
-Diese Beschreibung konkretisiert die Architektur-Spezifikation v0.3. Reader und Writer unterstützen **ausschliesslich Format 4**, für IOM und WKB. Dateien der IliContainer-Formate 1, 2 und 3 werden ausdrücklich abgelehnt und müssen aus dem ursprünglichen XTF neu erstellt werden. Es gibt keine Migration und keine Formatversionsoption. Die Formatversion ist unabhängig von der Spezifikationsversion; langfristige Binärkompatibilität ist noch nicht zugesagt.
+Diese Beschreibung konkretisiert die Architektur-Spezifikation v0.3. Reader und Writer unterstützen **ausschliesslich Format 5**, für IOM und WKB. Dateien der IliContainer-Formate 1, 2, 3 und 4 werden ausdrücklich abgelehnt und müssen aus dem ursprünglichen XTF neu erstellt werden. Es gibt keine Migration und keine Formatversionsoption. Die Formatversion ist unabhängig von der Spezifikationsversion; langfristige Binärkompatibilität ist noch nicht zugesagt.
 
 ## Aufbau
 
@@ -79,11 +79,11 @@ CRC32 dient der Erkennung von Beschädigungen, nicht der Authentifizierung. Der 
 
 ## Zahlenkodierung: Entscheidung im Prototyp
 
-Die Modellskala bleibt in `numericTypes` verfügbar. Die Dezimalvariante speichert trotzdem die tatsächliche Mantisse und Skala jedes Werts. Eine ausschliesslich aus dem Modell abgeleitete Skalierung würde bei ungeprüften Eingaben entweder runden oder einen zusätzlichen Ausnahmefall benötigen. Da die Erstellung keine vollständige Modellvalidierung voraussetzt, bleibt die explizite Skala der robuste erste Messpunkt. Native CBOR-Integer für Mantissen und das Weglassen wiederholter Modellskalen sind weitere Kompressionsoptimierungen; sie sind nicht Bestandteil von Dateiformat 4.
+Die Modellskala bleibt in `numericTypes` verfügbar. Die Dezimalvariante speichert trotzdem die tatsächliche Mantisse und Skala jedes Werts. Eine ausschliesslich aus dem Modell abgeleitete Skalierung würde bei ungeprüften Eingaben entweder runden oder einen zusätzlichen Ausnahmefall benötigen. Da die Erstellung keine vollständige Modellvalidierung voraussetzt, bleibt die explizite Skala der robuste erste Messpunkt. Native CBOR-Integer für Mantissen und das Weglassen wiederholter Modellskalen sind weitere Kompressionsoptimierungen; sie sind nicht Bestandteil von Dateiformat 5.
 
 Die Reihenfolge der Modell-/Quellprovenienzlisten kann von der Auflösungsreihenfolge des Compilers abhängen. Sie hat keine Transfersemantik; byteidentische Container über getrennte Erstellungen werden nicht zugesagt. Der abschliessende Neuaufbau der grossen 256-KiB-Standardvariante ergab identische Daten-/Verzeichnisframes und identische Metadaten nach Sortierung dieser Provenienzlisten.
 
-## WKB-Profil in Format 4
+## WKB-Profil in Format 5
 
 Metadaten ergänzen `geometryEncoding=wkb`, `geometryProfile=wkb-iso-v1`,
 `geometries` (nach qualifiziertem Attributpfad), `scalarTypes` und
@@ -111,10 +111,10 @@ GIS-Zugriff und WKB-Indexaufbau verwenden den direkten Weg. Die Geometriekodieru
 und analytische Umhüllung benötigen weder Hop noch LocationTech JTS. Details und
 Profilgrenzen stehen in [WKB.md](WKB.md).
 
-## Format 4 — verbindliche Bytebelegung
+## Format 5 — verbindliche Bytebelegung
 
-Format 4 ersetzt die IliContainer-Formate 1, 2 und 3. Der 16-Byte-Header verwendet die neue IBX-Familien-Magic,
-Versionsfeld (4) und Featurefeld (0). Frames behalten Typ i32, Nutzlänge i64,
+Format 5 ersetzt die IliContainer-Formate 1, 2, 3 und 4. Der 16-Byte-Header verwendet die neue IBX-Familien-Magic,
+Versionsfeld (5) und Featurefeld (0). Frames behalten Typ i32, Nutzlänge i64,
 CRC32 i32 und Nutzdaten. Alle binären Felder sind Big Endian, ausgenommen WKB.
 Eine FrameRef besteht aus Offset i64 und vollständiger Framelänge i64.
 
@@ -140,8 +140,25 @@ i32. Pro Chunk existiert genau ein Bereich; die Vorgängersuche prüft dessen En
 
 Chunkmetadaten enthalten firstFid für beide Geometriekodierungen. Metadaten
 enthalten Geometriekodierung und optionale räumliche Sortierung.
-Spatial-Knoten verwenden weiterhin CBOR, Kindreferenzen enthalten zusätzlich
-Framelängen; Blatt-Locations werden als binäre 53-Byte-Werte gespeichert.
+Spatial-Seiten haben einen 8-Byte-Kopf: Codecversion u8 (1), Layout u8,
+reserviert u16 (0), Eintragszahl i32 (nichtnegativ). Die Nutzdatenlänge muss
+exakt 8 + Anzahl × Eintragsgrösse sein und darf 16384 Bytes nicht überschreiten.
+Layout 1: Rechteckblatt, minX/minY/maxX/maxY als Float64 plus Location (85 Bytes).
+Layout 2: Punktblatt, X/Y als Float64 plus Location (69 Bytes).
+Layout 3: innerer Knoten, vier Float64-Bounds plus Kind-FrameRef (48 Bytes).
+Frame-Typen 8 und 9 bleiben Blatt beziehungsweise innerer Knoten. Das Manifest
+bleibt CBOR und enthält pro Index `leafLayout` (1 oder 2). Alle Koordinaten
+müssen endlich sein; Bounds müssen geordnet sein. Kindreferenzen müssen
+vollständig vor ihrer Elternseite liegen. Locations müssen auf gültige
+Framebereiche zeigen und ein nichtnegatives Objektordinal besitzen.
+
+Punktlayout gilt nur für einzelne CoordType-Attribute, nicht für MultiCoordType.
+Die bisherige konservative Erweiterung um eine Float64-Einheit wird beim Aufbau
+geprüft und für die Speicherung auf das exakte X/Y zurückgeführt. Decoder und
+Eltern-Bounds rekonstruieren nextDown/nextUp; damit bleiben selbst Abfragen an
+benachbarten Float64-Werten unverändert. Z bleibt ausschliesslich in der Geometrie.
+Leere Indizes besitzen ein Blatt mit null Einträgen. STR-Streifenanzahl und
+Seitenkapazität werden aus diesen festen Eintragsgrössen berechnet.
 
 ## Datenanordnung und Zugriff
 
@@ -151,9 +168,9 @@ HTTP beginnt mit einer einzigen 16-Byte-Headeranfrage. Bekannte Frames werden mi
 
 `info --storage` zählt physische Bytes je Abschnittstyp sowie Schlüssel- und Wertfelder nach Eintragstyp. Gemeinsame Seitenkosten (Frameheader und Eintragsanzahl) und Überlauf-Frames werden separat ausgewiesen. Lesemetriken unterscheiden logische Framezugriffe, HTTP-Anfragen, zusätzliche Zwischenraumbytes, geladene Metadaten/Indexseiten/Chunks und maximale Cachebelegung.
 
-## IBX 4: Navigation und Katalog
+## IBX 5: Navigation und Katalog
 
-Die Header-Magic lautet ASCII `IBXCONT1`, Footer-Magic `IBXFOOT1`, Version 4.
+Die Header-Magic lautet ASCII `IBXCONT1`, Footer-Magic `IBXFOOT1`, Version 5.
 IliContainer-Magic wird mit Neuerstellungshinweis abgelehnt, unabhängig von der
 Extension. Frame- und Footergrössen bleiben unverändert.
 
@@ -192,3 +209,5 @@ Referenznachladung beim XTF-Export. Es gibt keine separaten Indexdateien.
 Die neue Dataset-UUID bedeutet, dass unabhängig neu erstellte Container nicht
 byteidentisch sein müssen. Generatoren und erwartete fachliche Daten bleiben
 reproduzierbar; Zugriffscaches werden nie allein nach FID oder TID geteilt.
+
+Bei HTTP-Abfragen dürfen passende räumliche Geschwisterseiten über den bestehenden Frame-Cache gebündelt werden: maximal 64 KiB Zwischenraum und 1 MiB pro Range, nur wenn die betroffenen Seiten zusammen ins Cachebudget passen. Zwischenraumbytes werden separat gemessen. Lokale Zugriffe bleiben direkt. Dies kompensiert zusätzliche Blattgrenzen durch den veränderten Fanout; es gibt keine zusätzliche Verweistabelle.

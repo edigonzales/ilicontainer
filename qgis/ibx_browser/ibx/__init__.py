@@ -1,4 +1,4 @@
-"""Pure-Python reader for IBX container format 4.
+"""Pure-Python reader for IBX container format 5.
 
 This package implements the read side of the container format documented in
 ``docs/FORMAT.md``.  It is deliberately free of QGIS and Java dependencies so it

@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'ch.interlis.ibx'
-version = '0.4.0-prototype'
+version = '0.5.0-prototype'
 
 repositories {
     maven { url = uri('https://jars.interlis.guru/snapshots') }
@@ -21,7 +21,7 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 dependencies {
-    api 'ch.interlis:iox-ibx:0.1.0-SNAPSHOT'
+    api 'ch.interlis:iox-ibx:0.2.0-SNAPSHOT'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.22.2'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
     implementation 'com.github.luben:zstd-jni:1.5.7-16'
@@ -65,4 +65,11 @@ tasks.register('bridge', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'ch.interlis.ibx.bridge.BridgeMain'
     standardInput = System.in
+}
+
+configurations { ibxSources { transitive = false } }
+dependencies { ibxSources 'ch.interlis:iox-ibx:0.2.0-SNAPSHOT:sources' }
+tasks.register('releaseSources', Copy) {
+    from configurations.ibxSources
+    into layout.buildDirectory.dir('release-dependencies')
 }

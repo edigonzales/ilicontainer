@@ -1,4 +1,4 @@
-"""Frames, sources, caching and chunk decoding of container format 4.
+"""Frames, sources, caching and chunk decoding of container format 5.
 
 Mirrors ``ch.interlis.ibx.container`` and ``ch.interlis.ibx.remote`` for the
 read path.  All binary fields are big endian; offsets are absolute byte
@@ -15,7 +15,7 @@ from . import cbor
 
 MAGIC = b"IBXCONT1"
 FOOTER_MAGIC = b"IBXFOOT1"
-VERSION = 4
+VERSION = 5
 HEADER_SIZE = 16
 FRAME_HEADER = 16
 FOOTER_SIZE = 64
@@ -246,6 +246,8 @@ def check_header(source):
             "Containerformat %d wird nicht mehr unterstützt; aus dem "
             "ursprünglichen XTF neu erstellen." % version
         )
+    if magic == MAGIC and version != VERSION:
+        raise IbxError("Unsupported IBX format %d; expected %d; recreate from source" % (version, VERSION))
     if magic != MAGIC or version != VERSION or features != 0:
         raise IbxError("Unsupported IBX header/version/features")
     return version

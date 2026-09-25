@@ -188,7 +188,7 @@ Python-Leser und schreibt Zugriffszahlen nach `build/large/report.json`.
 
 ## Grenzen
 
-- Format 4 mit neuer IBX-Magic; alte IliContainer-Dateien aus XTF neu erstellen.
+- Format 5 mit neuer IBX-Magic; alte IliContainer-Dateien aus XTF neu erstellen.
 - Keine Schreiboperationen und kein GDAL-Dateitreiber. Der XTF-Export bleibt der
   Java-Kommandozeile vorbehalten.
 - Zstd-komprimierte Dateien benötigen eine auffindbare Zstandard-Bibliothek
