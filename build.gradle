@@ -7,6 +7,7 @@ group = 'ch.interlis.ibx'
 version = '0.4.0-prototype'
 
 repositories {
+    maven { url = uri('https://jars.interlis.guru/snapshots') }
     mavenCentral()
     maven { url = uri('https://jars.interlis.ch') }
 }
@@ -20,15 +21,11 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 dependencies {
-    api 'ch.interlis:iox-api:1.0.3'
-    api 'ch.interlis:iox-ili:1.24.4'
-    implementation 'ch.interlis:ili2c-core:5.6.8'
-    implementation 'ch.interlis:ili2c-tool:5.6.8'
+    api 'ch.interlis:iox-ibx:0.1.0-SNAPSHOT'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.22.2'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.2'
     implementation 'com.github.luben:zstd-jni:1.5.7-16'
     implementation 'info.picocli:picocli:4.7.7'
-    implementation 'com.fasterxml.woodstox:woodstox-core:7.2.2'
     testImplementation 'junit:junit:4.13.2'
 }
 dependencyLocking { lockAllConfigurations() }

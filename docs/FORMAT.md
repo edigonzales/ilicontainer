@@ -1,5 +1,7 @@
 # Experimentelles Dateiformat 4
 
+Die Transfermetadaten `version` unterscheiden XTF 2.3 und 2.4; beide verwenden denselben Format-4-Container. Bei 2.3 bleibt die XML-Abbildung ohne 2.4-Namensmapping. Der XTF-Rückexport erhält die Transfer-Version.
+
 Diese Beschreibung konkretisiert die Architektur-Spezifikation v0.3. Reader und Writer unterstützen **ausschliesslich Format 4**, für IOM und WKB. Dateien der IliContainer-Formate 1, 2 und 3 werden ausdrücklich abgelehnt und müssen aus dem ursprünglichen XTF neu erstellt werden. Es gibt keine Migration und keine Formatversionsoption. Die Formatversion ist unabhängig von der Spezifikationsversion; langfristige Binärkompatibilität ist noch nicht zugesagt.
 
 ## Aufbau

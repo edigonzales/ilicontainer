@@ -38,13 +38,13 @@ public class SemanticsTest {
   WriterOptions options() {
     WriterOptions w = new WriterOptions();
     geometryOptions(w);
-    w.modelFiles.add(ContainerTest.fixture("Tiny.ili").toAbsolutePath().toString());
+    w.modelFiles.add(java.nio.file.Paths.get("src/test/resources", "Tiny.ili").toAbsolutePath().toString());
     return w;
   }
 
   @Test
   public void blackboxesAndOidlessAssociationsRoundtrip() throws Exception {
-    String text = new String(Files.readAllBytes(ContainerTest.fixture("tiny.xtf")), "UTF-8");
+    String text = new String(Files.readAllBytes(java.nio.file.Paths.get("src/test/resources", "tiny.xtf")), "UTF-8");
     text =
         text.replace(
             "<Tiny:name>Grüezi</Tiny:name>",
@@ -86,7 +86,7 @@ public class SemanticsTest {
   @Test
   public void fullFixturesPassInterlisValidator() throws Exception {
     Path work = tmp.newFolder().toPath();
-    ModelBridge bridge = ModelBridge.load(ContainerTest.fixture("tiny.xtf"), options(), work);
+    ModelBridge bridge = ModelBridge.load(java.nio.file.Paths.get("src/test/resources", "tiny.xtf"), options(), work);
     List<String> errors = new ArrayList<String>();
     IoxLogging logging =
         event -> {
@@ -96,7 +96,7 @@ public class SemanticsTest {
     LogEventFactory factory = new LogEventFactory(config);
     factory.setLogger(logging);
     Validator validator = new Validator(bridge.model, config, logging, factory, new Settings());
-    Xtf24Reader reader = new Xtf24Reader(ContainerTest.fixture("tiny.xtf").toFile());
+    Xtf24Reader reader = new Xtf24Reader(java.nio.file.Paths.get("src/test/resources", "tiny.xtf").toFile());
     reader.setModel(bridge.model);
     try {
       IoxEvent e;
@@ -113,7 +113,7 @@ public class SemanticsTest {
 
   @Test
   public void emptyTransferAndOfflineFreshProcessExport() throws Exception {
-    String text = new String(Files.readAllBytes(ContainerTest.fixture("tiny.xtf")), "UTF-8");
+    String text = new String(Files.readAllBytes(java.nio.file.Paths.get("src/test/resources", "tiny.xtf")), "UTF-8");
     int start = text.indexOf("<ili:datasection>") + "<ili:datasection>".length();
     text = text.substring(0, start) + text.substring(text.indexOf("</ili:datasection>"));
     Path input = tmp.newFile("empty.xtf").toPath();
@@ -121,7 +121,7 @@ public class SemanticsTest {
     Path file = tmp.getRoot().toPath().resolve("empty.ibx");
     ContainerWriter.create(input, file, options());
     Path populated = tmp.getRoot().toPath().resolve("populated.ibx");
-    ContainerWriter.create(ContainerTest.fixture("tiny.xtf"), populated, options());
+    ContainerWriter.create(java.nio.file.Paths.get("src/test/resources", "tiny.xtf"), populated, options());
     for (Path source : Arrays.asList(file, populated)) {
       String java = Paths.get(System.getProperty("java.home"), "bin", "java").toString();
       Path out = tmp.getRoot().toPath().resolve(source.getFileName() + ".xtf"),
@@ -153,7 +153,7 @@ public class SemanticsTest {
 
   @Test
   public void growingTransferScansInFixedHeap() throws Exception {
-    String text = new String(Files.readAllBytes(ContainerTest.fixture("tiny.xtf")), "UTF-8");
+    String text = new String(Files.readAllBytes(java.nio.file.Paths.get("src/test/resources", "tiny.xtf")), "UTF-8");
     String prefix =
         text.substring(0, text.indexOf("<ili:datasection>"))
             + "<ili:datasection><Tiny:Data ili:bid=\"many\">";
@@ -179,7 +179,7 @@ public class SemanticsTest {
                 ScanProbe.class.getName(),
                 input.toString(),
                 file.toString(),
-                ContainerTest.fixture("Tiny.ili").toAbsolutePath().toString(),
+                java.nio.file.Paths.get("src/test/resources", "Tiny.ili").toAbsolutePath().toString(),
                 geometryEncoding)
             .redirectErrorStream(true)
             .redirectOutput(log.toFile())
@@ -205,13 +205,13 @@ public class SemanticsTest {
   @Test
   public void fragmentedInputStillProducesCompleteCoordinates() throws Exception {
     ModelBridge bridge =
-        ModelBridge.load(ContainerTest.fixture("tiny.xtf"), options(), tmp.newFolder().toPath());
+        ModelBridge.load(java.nio.file.Paths.get("src/test/resources", "tiny.xtf"), options(), tmp.newFolder().toPath());
     assertEquals(
         Boolean.TRUE,
         javax.xml.stream.XMLInputFactory.newFactory()
             .getProperty(javax.xml.stream.XMLInputFactory.IS_COALESCING));
     for (final int block : new int[] {1, 3, 7, 64}) {
-      try (InputStream raw = Files.newInputStream(ContainerTest.fixture("tiny.xtf"))) {
+      try (InputStream raw = Files.newInputStream(java.nio.file.Paths.get("src/test/resources", "tiny.xtf"))) {
         InputStream fragmented =
             new FilterInputStream(raw) {
               public int read(byte[] b, int off, int len) throws IOException {

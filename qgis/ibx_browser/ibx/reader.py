@@ -81,7 +81,7 @@ class Container:
         meta = self.metadata
         if not isinstance(meta, dict):
             raise IbxError("Invalid metadata")
-        if str(meta.get("version")) != "2.4" or int(meta.get("mappingVersion", 0)) != 1:
+        if str(meta.get("version")) not in ("2.3", "2.4") or int(meta.get("mappingVersion", 0)) != 1:
             raise IbxError("Unsupported transfer/mapping version")
         encoding = meta.get("geometryEncoding")
         if encoding not in ("iom", "wkb"):

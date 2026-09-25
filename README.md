@@ -1,6 +1,6 @@
 # IBX — INTERLIS Binary eXchange
 
-Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren Containers für **INTERLIS 2.4 FULL**. Initial-/Update-Transfers und XTF 2.3 werden ausdrücklich abgelehnt.
+Experimenteller Java-Prototyp eines kompakten, streambaren und selektiv lesbaren Containers für **INTERLIS 2.3 und 2.4 FULL**. Initial-/Update-Transfers werden ausdrücklich abgelehnt. Die XTF-Version bleibt beim Rückexport erhalten.
 
 - [Architektur und Prototyp-Spezifikation v0.3](ibx-architektur-prototyp-spezifikation-v0.3.md)
 - [Experimentelles Dateiformat und Implementierungsdetails](docs/FORMAT.md)
@@ -147,4 +147,4 @@ try (IbxContainer container = IbxContainer.open(uri, options)) {
 
 Standardmässig werden höchstens 32 Objektpositionen vorausgelesen. Bytebereiche werden nur bei höchstens 4 KiB Abstand und bis zu insgesamt 1 MiB zusammengefasst. Vorab geladene Frames und normale Lesezugriffe teilen sich den 32-MiB-Cache; Frames oberhalb des Cachebudgets werden bei Bedarf gelesen und nicht dauerhaft gespeichert. `RemoteOptions` ist auch bei `open(Path, options)` verwendbar. Chunk-Grösse, räumliche Anordnung und Vorladen sind anhand des eigenen Abfragemusters zu vergleichen; die [Messmatrix](docs/benchmarks/format3/README.md) weist auch Verschlechterungen aus.
 
-Die Distribution enthält Bibliotheks-JAR, Abhängigkeiten und Startskripte. Noch keine Veröffentlichung in einem Maven-Repository und keine langfristige Garantie für Dateiformat oder API.
+Die Distribution enthält Bibliotheks-JAR, Abhängigkeiten und Startskripte. Der gemeinsame Formatkern wird als `ch.interlis:iox-ibx:0.1.0-SNAPSHOT` von `https://jars.interlis.guru/snapshots` bezogen. Quellcode und IOX-Writer liegen in [iox-ibx](https://github.com/edigonzales/iox-ibx); CLI, Benchmarks, Bridge und QGIS bleiben hier. Keine langfristige Garantie für Dateiformat oder API.

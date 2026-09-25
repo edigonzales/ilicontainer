@@ -15,7 +15,7 @@ import picocli.CommandLine.*;
     name = "ibx",
     mixinStandardHelpOptions = true,
     version = "IBX 0.4.0-prototype",
-    description = "INTERLIS 2.4 FULL chunked transfer container.",
+    description = "INTERLIS 2.3/2.4 FULL chunked transfer container.",
     subcommands = {
       Main.Create.class,
       Main.Info.class,

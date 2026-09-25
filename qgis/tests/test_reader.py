@@ -147,6 +147,18 @@ class KeyTests(unittest.TestCase):
 
 
 class ContainerTests(unittest.TestCase):
+    def test_transfer_versions(self):
+        container, _ = open_container(NONE)
+        try:
+            for version in ("2.3", "2.4"):
+                container.metadata["version"] = version
+                container._validate_metadata()
+            container.metadata["version"] = "2.2"
+            with self.assertRaises(IbxError):
+                container._validate_metadata()
+        finally:
+            container.close()
+
     def test_header_footer_and_metadata(self):
         container, navigation = open_container(QUARTIER)
         try:

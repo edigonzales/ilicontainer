@@ -30,9 +30,9 @@ public class RemoteTest {
   Path create() throws Exception {
     WriterOptions o = new WriterOptions();
     geometryOptions(o);
-    o.modelFiles.add(ContainerTest.fixture("Tiny.ili").toString());
+    o.modelFiles.add(java.nio.file.Paths.get("src/test/resources", "Tiny.ili").toString());
     Path target = tmp.getRoot().toPath().resolve("data.ibx");
-    ContainerWriter.create(ContainerTest.fixture("tiny.xtf"), target, o);
+    ContainerWriter.create(java.nio.file.Paths.get("src/test/resources", "tiny.xtf"), target, o);
     return target;
   }
 
@@ -97,12 +97,12 @@ public class RemoteTest {
   public void changedRemoteExportNeverReplacesTarget() throws Exception {
     Path input = tmp.newFile("large.xtf").toPath(),
         source = tmp.getRoot().toPath().resolve("large.ibx");
-    String text = new String(Files.readAllBytes(ContainerTest.fixture("tiny.xtf")), "UTF-8");
+    String text = new String(Files.readAllBytes(java.nio.file.Paths.get("src/test/resources", "tiny.xtf")), "UTF-8");
     text = text.replace("Grüezi", String.join("", java.util.Collections.nCopies(100000, "abc")));
     Files.write(input, text.getBytes("UTF-8"));
     WriterOptions options = new WriterOptions();
     geometryOptions(options);
-    options.modelFiles.add(ContainerTest.fixture("Tiny.ili").toString());
+    options.modelFiles.add(java.nio.file.Paths.get("src/test/resources", "Tiny.ili").toString());
     options.compression = "none";
     ContainerWriter.create(input, source, options);
     assertTrue(Files.size(source) > 65536);

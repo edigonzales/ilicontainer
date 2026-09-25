@@ -42,8 +42,8 @@ public final class RoundtripVerifier {
   }
 
   private static void parse(Path file, ModelBridge bridge, ExternalSort records) throws Exception {
-    Xtf24Reader reader = new Xtf24Reader(file.toFile());
-    reader.setModel(bridge.model);
+    IoxReader reader = Xtf24Reader.createReader(file.toFile());
+    ((ch.interlis.iox_j.IoxIliReader) reader).setModel(bridge.model);
     long basket = -1;
     boolean ended = false;
     try {
